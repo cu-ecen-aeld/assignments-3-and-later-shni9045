@@ -4,7 +4,7 @@ function processfile() {
 
     for f in $1/*
         do
-        if [ -e $f ]
+        if [ -f $f ]
         then
 
             ((numfiles=numfiles+1))
