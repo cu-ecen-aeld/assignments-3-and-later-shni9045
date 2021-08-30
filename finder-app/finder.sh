@@ -37,7 +37,7 @@ match=0
 
 if [ $# -ne 2 ]
 then 
-     printf "Not All Parameters Specified for the script"
+     printf "Not All Or Excess Parameters Specified for the script"
      exit 1
 else
     if [ -d $1 ]

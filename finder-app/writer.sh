@@ -6,23 +6,17 @@ minarg=1
 numfiles=0
 
 
-if [ $# -lt 2 ]
+if [ $# -ne 2 ]
 then 
-     printf "Not All Parameters Specified"
+     printf "Not All Or Excess Parameters Specified"
      exit 1
 else
-    if [ -e $2 ]
+    if [ -f $2 ]
     then
         touch -a $1
-        for str in $2
-        do
-        echo "$str"> $1
-        done
+        echo "$2" > $1
+
     else
-        
-        for str in $2
-        do
-        echo "$str"> $1
-        done
+        echo "$2" > $1
     fi       
 fi
