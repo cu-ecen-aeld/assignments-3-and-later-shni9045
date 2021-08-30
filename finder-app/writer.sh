@@ -1,11 +1,5 @@
 #!/bin/bash
 
-#echo "Ok"
-
-minarg=1
-numfiles=0
-
-
 if [ $# -ne 2 ]
 then 
      printf "Not All Or Excess Parameters Specified"
