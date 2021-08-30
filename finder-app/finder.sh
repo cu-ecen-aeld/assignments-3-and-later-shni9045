@@ -9,11 +9,13 @@ function processfile() {
         do
         if [ -f $f ]
         then
-
-            ((numfiles=numfiles+1))
-            
             # Invoke function to find lines with matched string
             match=$(findstr  $2  $f)
+            # Count only the files with matched line/lines 
+            if [ $match -gt 0]
+            then
+                ((numfiles=numfiles+1))
+            fi
 
             ((matchlines=matchlines+match))
 
