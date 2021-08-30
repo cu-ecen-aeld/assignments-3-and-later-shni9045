@@ -8,15 +8,15 @@ then
 else
     if [ -f $1 ]
     then
-        # Update the time-stamp of file modification
-        touch -a $1
-        # Write to file
+        # Update the access and modification time-stamp of file
+        touch -c-d  $1
+        # Write string to file
         echo "$2" > $1
 
     else
-        # Create the file
-        touch -a $1
-        # Write to file
+        # Just Create an empty file
+        touch $1
+        # Write string to file
         echo "$2" > $1
     fi
     # Check for file creation

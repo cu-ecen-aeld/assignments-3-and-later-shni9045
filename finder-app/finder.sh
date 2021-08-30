@@ -1,12 +1,14 @@
 #!/bin/bash
 
 #
-# Function to traverse files in a directory and sub-directories
+# Recursive Function to traverse files in a directory and sub-directories
 #
 function processfile() {
 
     for f in $1/*
         do
+
+        # Check if it's a file
         if [ -f $f ]
         then
             # Invoke function to find lines with matched string
@@ -21,6 +23,7 @@ function processfile() {
             # Add to global matched line count
             ((matchlines=matchlines+match))
 
+        # Check if it's a sub-directory
         elif [ -d $f ]
         then
             # Recursively search the sub-directory
@@ -35,7 +38,8 @@ function processfile() {
 # Function to find number of lines matching a string in a file
 #
 function findstr() {
-
+    
+     # Command to give count of number of lines that match a pattern
      grep -c "$1" $2
 
 }
@@ -58,6 +62,8 @@ else
     then 
         for file in $1/*
         do
+
+        # Check if it's a file
         if [ -f $file ]
         then
 
@@ -73,6 +79,7 @@ else
             # Add to global matched line count
             ((matchlines=matchlines+match))
 
+        # Check if it's a sub-directory
         elif [ -d $file ]
         then
             # Recursively search the sub-directory
