@@ -21,13 +21,13 @@ void test_validate_my_username()
     
     //TEST_ASSERT_TRUE_MESSAGE(false,"AESD students, please fix me!");
 
+    // Pointer to string returned from conf file
     char *conf_username = malloc_username_from_conf_file();
 
+    // Test if the strings are equal
     TEST_ASSERT_EQUAL_STRING_MESSAGE(conf_username, my_username(),"Failure\n");
 
-    //TEST_ASSERT_EQUAL_STRING_MESSAGE(malloc_username_from_conf_file(), my_username(),"Good\n");
-
-
+    // free the returned pointer from malloc_username_from_conf_file() function
     free(conf_username);
 
 
