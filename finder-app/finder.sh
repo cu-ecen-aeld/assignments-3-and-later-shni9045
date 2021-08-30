@@ -11,12 +11,14 @@ function processfile() {
         then
             # Invoke function to find lines with matched string
             match=$(findstr  $2  $f)
+
             # Count only the files with matched line/lines 
-            if [ $match -gt 0]
+            if [ $match -gt 0 ]
             then
                 ((numfiles=numfiles+1))
             fi
 
+            # Add to global matched line count
             ((matchlines=matchlines+match))
 
         elif [ -d $f ]
@@ -45,6 +47,8 @@ matchlines=0
 # Variable to temporarily store count of matched lines in a file
 match=0
 
+
+# Check to see if correct number of script parameters are specified
 if [ $# -ne 2 ]
 then 
      printf "Not All Or Excess Parameters Specified for the script"
@@ -56,12 +60,17 @@ else
         do
         if [ -f $file ]
         then
-        
-            ((numfiles=numfiles+1))
 
             # Invoke function to find lines with matched string
             match=$(findstr  $2  $file)
 
+             # Count only the files with matched line/lines 
+            if [ $match -gt 0 ]
+            then
+                ((numfiles=numfiles+1))
+            fi
+
+            # Add to global matched line count
             ((matchlines=matchlines+match))
 
         elif [ -d $file ]
