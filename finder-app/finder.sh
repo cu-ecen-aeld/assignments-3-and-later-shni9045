@@ -10,9 +10,7 @@ function processfile() {
             ((numfiles=numfiles+1))
 
             match=$(findstr  $2  $f)
-            #echo "Recursive Call"
-            #echo $f
-            #echo $match
+
             ((matchlines=matchlines+match))
 
         elif [ -d $f ]
@@ -32,16 +30,14 @@ function findstr() {
 }
 
 
-#echo "Ok"
-
 minarg=1
 numfiles=0
 matchlines=0
-match=3
+match=0
 
-if [ $# -lt 1 ]
+if [ $# -ne 2 ]
 then 
-     printf "Not All Parameters Specified"
+     printf "Not All Parameters Specified for the script"
      exit 1
 else
     if [ -d $1 ]
@@ -54,22 +50,19 @@ else
             ((numfiles=numfiles+1))
 
             match=$(findstr  $2  $file)
-            #echo $file
-            #echo $match
+
             ((matchlines=matchlines+match))
 
         elif [ -d $file ]
         then
-            #echo "Here directory"
             processfile $file $2
              
         fi
         done
     else
-        printf "First argument does not represent a directory"
+        printf "First argument does not represent a directory on the filesystem"
         exit 1
     fi
-    #printf "Total Files : %d" ${numfiles}
-    #printf "Matching Lines : %d" ${matchlines}
+
     printf "The number of files are %d and the number of matching lines are %d" ${numfiles} ${matchlines}
 fi
