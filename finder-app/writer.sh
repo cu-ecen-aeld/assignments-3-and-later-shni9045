@@ -10,13 +10,13 @@ else
     then
         # Update the access and modification time-stamp of file
         touch -c-d  $1
-        # Write string to file
+        # Write given string to file
         echo "$2" > $1
 
     else
         # Just Create an empty file
         touch $1
-        # Write string to file
+        # Write given string to file
         echo "$2" > $1
     fi
     # Check for file creation
