@@ -2,14 +2,14 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <syslog.h>
 #include <errno.h>
 
 int main(int argc,char **argv){
 
-    openlog(" WRITER : ",LOG_PID,LOG_USER);
+    openlog("Writer : ",LOG_PID,LOG_USER);
 
     int fd;
     int nr;
@@ -20,8 +20,12 @@ int main(int argc,char **argv){
     char *path;
 
     char *temp_str;
+    char *temp;
 
-    struct stat path_stat;
+    char *command;
+
+    struct stat path_stat={.st_mode=0};
+
 
     if (argc < 3){
 
@@ -37,41 +41,59 @@ int main(int argc,char **argv){
 
     }
 
-    filepath = (char*)malloc(strlen(argv[1]));
-    str_data = (char*)malloc(strlen(argv[2]));
+    filepath = (char*)malloc(sizeof(char)*(strlen(argv[1])+1));
+    str_data = (char*)malloc(sizeof(char)*(strlen(argv[2])+1));
 
     sscanf(argv[1],"%s",filepath);
     sscanf(argv[2],"%s",str_data);
 
     temp_str=(filepath+strlen(filepath)-1);
+    temp=(filepath+strlen(filepath)-1);
 
     int i=0;
-    while (*(temp_str-i-1)!= '/'){
+
+    while (*(temp_str-i-1)!= '/' && (i < (strlen(filepath)-2))){
         i++;
+        temp--;
     }
     i++;
     i++;
 
-    path=(char*)malloc(strlen(filepath)-i);
+   if((strlen(filepath)-i) > 0){
 
-    strncpy(path,filepath,strlen(filepath)-i);
 
-    stat(path,&path_stat);
-    if(!(path_stat.st_mode & S_IFDIR)){
-        if (mkdir(path,S_IRWXU | S_IRWXG | S_IRWXO) == -1){
-            printf("\nmkdir failed");
-            return -1;
+        path=(char*)malloc(sizeof(char)*(strlen(filepath)-i)+1);
+
+        strncpy(path,filepath,strlen(filepath)-i);
+        *(path+strlen(filepath)-i) = '\0';
+
+        stat(path,&path_stat);
+        if(!(path_stat.st_mode & S_IFDIR)){
+
+            command=(char*)malloc(sizeof(char)*(10+strlen(path)));
+
+            strncpy(command,"mkdir -p ",10);
+            *(command+10) = '\0';
+            strcat(command,path);
+
+            system(command);
+
         }
+
+        free(path);
+        free(command);
+
     }
 
-    if ( (fd=open(filepath,O_RDWR | O_TRUNC | O_CREAT,S_IRWXU | S_IRWXG | S_IRWXO)) == -1 ){
+
+    if ( (fd=open(filepath,O_RDWR | O_TRUNC | O_CREAT,S_IRWXU )) == -1 ){
 
         //perror("Opening File:");
         syslog(LOG_ERR,"Error in opening file\n");
         return -1;
     }
 
-    syslog(LOG_DEBUG,"Writing %s to file %s",str_data,filepath);
+    syslog(LOG_DEBUG,"Writing %s to file %s",str_data,temp);
 
    if ( (nr=write(fd,str_data,strlen(str_data))) == -1){
 
@@ -83,7 +105,8 @@ int main(int argc,char **argv){
 
     free(filepath);
     free(str_data);
-    free(path);
+
+    closelog();
 
     return 0;
 }
