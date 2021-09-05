@@ -1,4 +1,4 @@
-CC = gcc
+CC = $(CROSS_COMPILE)gcc
 CFLAGS = -Wall -Werror
 writer: writer.o
 	 $(CC) $(CFLAGS) -o writer writer.o

@@ -30,14 +30,14 @@ int main(int argc,char **argv){
     if (argc < 3){
 
         syslog(LOG_ERR,"Few Arguments Specified\n");
-        exit(-1);
+        return 1;
 
     }
 
     if (argc > 3){
 
         syslog(LOG_ERR,"Extra Arguments Specified\n");
-        exit(-1);
+        return 1;
 
     }
 
