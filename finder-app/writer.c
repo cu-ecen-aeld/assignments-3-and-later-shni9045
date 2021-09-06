@@ -1,6 +1,6 @@
 /*
 * Code for AESD Assignment 2 for writer.sh script functionality in C language
-*
+* @shrikant nimhan - shni9045
 *
 */
 
