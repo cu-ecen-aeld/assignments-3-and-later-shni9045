@@ -69,12 +69,13 @@ bool do_system(const char *cmd)
 bool do_exec(int count, ...)
 {
     //char **temp_arg;
-    pid_t pid;
-    int status;
+    pid_t pid1;
+    int status1=-1;
 
     va_list args;
     va_start(args, count);
     char * command[count+1];
+    //char * para[count];
     int i;
     for(i=0; i<count; i++)
     {
@@ -85,6 +86,9 @@ bool do_exec(int count, ...)
     // and may be removed
     command[count] = command[count];
 
+
+
+
 /*
  * TODO:
  *   Execute a system command by calling fork, execv(),
@@ -94,38 +98,45 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *   
 */
-    pid=fork();
+    //pid1=fork();
 
-    if(pid == -1){
+    if((pid1=fork()) == -1){
 
         perror("ERROR fork() Call:");
         return false;
 
     }
 
-    else if(pid==0){
+    else if(pid1==0){
 
-    
-        execv(command[0],command);
-
+        
+        execv(command[0],&command[0]);
+        //execv(command[0],para);
+        perror("ERROR exec() call:");
         return false;
 
     }
 
-    if(waitpid(pid,&status,0) == -1){
+    else{
+
+    if(waitpid(pid1,&status1,0) == -1){
         
         perror("ERROR waitpid() call:");
         return false;
 
     }
 
-    else if (WIFEXITED(status)){
+    if (WIFEXITED(status1)){
 
-    if(WEXITSTATUS(status) !=0 ){
+        printf("\n\nhere1");
+        printf("....%d",WEXITSTATUS(status1));
+
+    if(WEXITSTATUS(status1) !=0 ){
             printf("\nNon-Zero Value returned by Issued Command");
             return false;
         }
 
+    }
     }
 
 
@@ -141,6 +152,7 @@ bool do_exec(int count, ...)
 */
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
+    int status;
 
     pid_t pid;
 
@@ -175,17 +187,39 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     
     dup2(filefd,1);
   
-    close(filefd);
-    execv(command[0],command);
+    //close(filefd);
+    execv(command[0],&command[0]);
     return false;
  
     }
+    else if (pid == -1){
+        perror("ERROR fork()");
+        return false;
+    }
     else {
+
+        
+          if(waitpid(pid,&status,0) == -1){
+        
+        perror("ERROR waitpid() call:");
+        return false;
+
+    }
+
+    if(WEXITSTATUS(status) !=0 ){
+            printf("\nNon-Zero Value returned by Issued Command");
+            return false;
+        }
  
-    return false;
  
     }
 
+    /*if(waitpid(pid,&status,0) == -1){
+        
+        perror("ERROR waitpid() call:");
+        return false;
+
+    }*/
 
     va_end(args);
     
