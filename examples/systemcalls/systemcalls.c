@@ -15,7 +15,39 @@ bool do_system(const char *cmd)
  *  Call the system() function with the command set in the cmd
  *   and return a boolean true if the system() call completed with success 
  *   or false() if it returned a failure
-*/
+*/  
+    int sys_return;
+
+    if(cmd==NULL){
+
+        printf("\nEmpty Command");
+        //return false;
+    }
+
+    sys_return=system(cmd);
+
+
+    if(sys_return == -1){
+
+        printf("\nError in invocation of system() call");
+        perror("\nERROR system():");
+
+        return false;
+
+    }
+
+    else {
+
+        if (WIFEXITED(sys_return)){
+
+            if(WEXITSTATUS(sys_return) !=0 ){
+                printf("\nNon-Zero Value returned by Issued Command");
+                return false;
+            }
+
+        }
+
+    }
 
     return true;
 }
@@ -36,6 +68,10 @@ bool do_system(const char *cmd)
 
 bool do_exec(int count, ...)
 {
+    //char **temp_arg;
+    pid_t pid;
+    int status;
+
     va_list args;
     va_start(args, count);
     char * command[count+1];
@@ -58,6 +94,42 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *   
 */
+    pid=fork();
+
+    if(pid == -1){
+
+        perror("ERROR fork() Call:");
+        return false;
+
+    }
+
+    else if(pid==0){
+
+        //temp_arg=command+1;
+        //execl(command[0],*temp_arg,(char *) NULL);
+        //execv(command[0],*temp_arg);
+        execv(command[0],command);
+
+        return false;
+
+    }
+
+    if(waitpid(pid,&status,0) == -1){
+        
+        perror("ERROR waitpid() call:");
+        return false;
+
+    }
+
+    else if (WIFEXITED(status)){
+
+    if(WEXITSTATUS(status) !=0 ){
+            printf("\nNon-Zero Value returned by Issued Command");
+            return false;
+        }
+
+    }
+
 
     va_end(args);
 
@@ -71,9 +143,13 @@ bool do_exec(int count, ...)
 */
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
+    pid_t pid;
+    int status;
+    //int childpid;
     va_list args;
     va_start(args, count);
     char * command[count+1];
+    //char **temp_arg;
     int i;
     for(i=0; i<count; i++)
     {
@@ -91,7 +167,68 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   redirect standard out to a file specified by outputfile.
  *   The rest of the behaviour is same as do_exec()
  *   
-*/
+*/  
+    /*
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, S_IRWXU);
+
+    if (fd < 0) 
+    {
+        perror("ERROR open() call:"); 
+        return false;
+    }
+
+    switch (childpid = fork()) {
+
+        case -1: {
+            perror("ERROR fork() call:");
+            return false;
+            }
+        case 0:{
+            if (dup2(fd, 1) < 0) {
+                perror("ERROR dup2() call:"); 
+                return false; 
+            }
+            //close(fd);
+            //temp_arg=command+1;
+            //execl(command[0],*temp_arg,(char *) NULL);
+            //execv(command[0],*temp_arg);
+            execv(command[0],command);
+            perror("execvp:"); 
+            return false;
+        }
+        //default:
+            //close(fd);
+
+    }*/
+
+    int filefd = open(outputfile, O_WRONLY|O_CREAT, 0666);
+    if (!(pid=fork())) {
+    close(1);//Close stdout
+    dup(filefd);
+    execv(command[0],command);
+    perror("execvp:");
+   
+    } else {
+    close(filefd);
+    return false;
+    //wait(NULL);
+    }
+
+    if(waitpid(pid,&status,0) == -1){
+        
+        perror("ERROR waitpid() call:");
+        return false;
+
+    }
+
+    else if (WIFEXITED(status)){
+
+    if(WEXITSTATUS(status) ==-1 ){
+            printf("\nNon-Zero Value returned by Issued Command");
+            return false;
+        }
+
+    }
 
     va_end(args);
     
