@@ -105,9 +105,7 @@ bool do_exec(int count, ...)
 
     else if(pid==0){
 
-        //temp_arg=command+1;
-        //execl(command[0],*temp_arg,(char *) NULL);
-        //execv(command[0],*temp_arg);
+    
         execv(command[0],command);
 
         return false;
@@ -143,9 +141,9 @@ bool do_exec(int count, ...)
 */
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
+
     pid_t pid;
-    int status;
-    //int childpid;
+
     va_list args;
     va_start(args, count);
     char * command[count+1];
@@ -168,67 +166,26 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *   
 */  
-    /*
-    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, S_IRWXU);
+    
 
-    if (fd < 0) 
-    {
-        perror("ERROR open() call:"); 
-        return false;
-    }
-
-    switch (childpid = fork()) {
-
-        case -1: {
-            perror("ERROR fork() call:");
-            return false;
-            }
-        case 0:{
-            if (dup2(fd, 1) < 0) {
-                perror("ERROR dup2() call:"); 
-                return false; 
-            }
-            //close(fd);
-            //temp_arg=command+1;
-            //execl(command[0],*temp_arg,(char *) NULL);
-            //execv(command[0],*temp_arg);
-            execv(command[0],command);
-            perror("execvp:"); 
-            return false;
-        }
-        //default:
-            //close(fd);
-
-    }*/
-
-    int filefd = open(outputfile, O_WRONLY|O_CREAT, 0666);
     if (!(pid=fork())) {
-    close(1);//Close stdout
-    dup(filefd);
-    execv(command[0],command);
-    perror("execvp:");
-   
-    } else {
+
+        int filefd = open(outputfile, O_RDWR|O_CREAT, S_IRWXU);
+
+    
+    dup2(filefd,1);
+  
     close(filefd);
+    execv(command[0],command);
     return false;
-    //wait(NULL);
+ 
+    }
+    else {
+ 
+    return false;
+ 
     }
 
-    if(waitpid(pid,&status,0) == -1){
-        
-        perror("ERROR waitpid() call:");
-        return false;
-
-    }
-
-    else if (WIFEXITED(status)){
-
-    if(WEXITSTATUS(status) ==-1 ){
-            printf("\nNon-Zero Value returned by Issued Command");
-            return false;
-        }
-
-    }
 
     va_end(args);
     
