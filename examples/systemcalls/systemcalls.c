@@ -68,14 +68,14 @@ bool do_system(const char *cmd)
 
 bool do_exec(int count, ...)
 {
-    //char **temp_arg;
+  
     pid_t pid1;
     int status1=-1;
 
     va_list args;
     va_start(args, count);
     char * command[count+1];
-    //char * para[count];
+  
     int i;
     for(i=0; i<count; i++)
     {
@@ -127,9 +127,6 @@ bool do_exec(int count, ...)
 
     if (WIFEXITED(status1)){
 
-        //printf("\n\nhere1");
-        //printf("....%d",WEXITSTATUS(status1));
-
     if(WEXITSTATUS(status1) !=0 ){
             printf("\nNon-Zero Value returned by Issued Command");
             return false;
@@ -152,8 +149,8 @@ bool do_exec(int count, ...)
 bool do_exec_redirect(const char *outputfile, int count, ...)
 {
     int status;
-
     pid_t pid;
+    int new_pid_return;
 
     va_list args;
     va_start(args, count);
@@ -184,10 +181,11 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         int filefd = open(outputfile, O_RDWR|O_CREAT, S_IRWXU);
         if (filefd==-1) {perror("ERROR open() call:");return false;}
 
-    
-        dup2(filefd,1);
+        new_pid_return=dup2(filefd,1);
+        if (new_pid_return==-1) {perror("ERROR dup2() call:");return false;}
     
         close(filefd);
+
         execv(command[0],&command[0]);
         exit(-1);
  
@@ -205,17 +203,8 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
             perror("ERROR waitpid() call:");
             return false;
         }
-
-        if(WEXITSTATUS(status) !=0 ){
-            printf("\nNon-Zero Value returned by Issued Command");
-            return false;
-        }
-
-
+  
         if (WIFEXITED(status)){
-
-            //printf("\n\nhere1");
-            //printf("....%d",WEXITSTATUS(status));
 
         if(WEXITSTATUS(status) !=0 ){
                 printf("\nNon-Zero Value returned by Issued Command");
