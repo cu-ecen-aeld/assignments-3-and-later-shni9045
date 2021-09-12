@@ -120,20 +120,20 @@ sudo mknod -m 666 dev/null c 1 3
 sudo mknod -m 600 dev/console c 5 1
 
 # TODO: Clean and build the writer utility
-cd /home/shrikant/assignments-3-and-later-shni9045/finder-app
+cd $FINDER_APP_DIR
 make clean
 make CROSS_COMPILE=${CROSS_COMPILE}
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
-cp -r /home/shrikant/assignments-3-and-later-shni9045/finder-app/conf/ ${OUTDIR}/rootfs/home
-cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/finder-test.sh ${OUTDIR}/rootfs/home
-cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/finder.sh ${OUTDIR}/rootfs/home
-cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/writer ${OUTDIR}/rootfs/home
-cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/writer.sh ${OUTDIR}/rootfs/home
-cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/writer.c ${OUTDIR}/rootfs/home
-cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/makefile ${OUTDIR}/rootfs/home
-cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/autorun-qemu.sh ${OUTDIR}/rootfs/home
+cp -r ./conf/ ${OUTDIR}/rootfs/home
+cp  ./finder-test.sh ${OUTDIR}/rootfs/home
+cp  ./finder.sh ${OUTDIR}/rootfs/home
+cp  ./writer ${OUTDIR}/rootfs/home
+cp  ./writer.sh ${OUTDIR}/rootfs/home
+cp  ./writer.c ${OUTDIR}/rootfs/home
+cp  ./makefile ${OUTDIR}/rootfs/home
+cp  ./autorun-qemu.sh ${OUTDIR}/rootfs/home
 
 # TODO: Chown the root directory
 
