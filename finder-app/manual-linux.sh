@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Script outline to install and build kernel.
 # Author: Siddhant Jajoo.
 
@@ -35,9 +35,29 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     git checkout ${KERNEL_VERSION}
 
     # TODO: Add your kernel build steps here
+
+    #${ARCH} ${CROSS_COMPILE}
+
+    # Deep Clean kernel build tree
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} mrproper
+
+    # Configure for  virtual arm dev board for QEMU
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
+
+    # Build kernel image for QEMU
+    make -j4 ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} all
+
+    # Build Kernel Modules
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} modules
+
+    # Build the device tree
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} dtbs
+
+
 fi 
 
 echo "Adding the Image in outdir"
+cp -a ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ${OUTDIR}
 
 echo "Creating the staging directory for the root filesystem"
 cd "$OUTDIR"
@@ -49,6 +69,13 @@ fi
 
 # TODO: Create necessary base directories
 
+mkdir ${OUTDIR}/rootfs
+cd ${OUTDIR}/rootfs
+mkdir bin dev etc home lib lib64 proc sbin sys tmp usr var
+mkdir usr/bin usr/lib usr/sbin
+mkdir -p var/log
+
+
 cd "$OUTDIR"
 if [ ! -d "${OUTDIR}/busybox" ]
 then
@@ -56,25 +83,65 @@ git clone git://busybox.net/busybox.git
     cd busybox
     git checkout ${BUSYBOX_VERSION}
     # TODO:  Configure busybox
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} distclean
+    make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} defconfig
 else
     cd busybox
 fi
 
 # TODO: Make and insatll busybox
 
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE}
+
+make ARCH=${ARCH} CROSS_COMPILE=${CROSS_COMPILE} CONFIG_PREFIX=${OUTDIR}/rootfs install
+
+cd ${OUTDIR}/rootfs
 echo "Library dependencies"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "program interpreter"
 ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 
 # TODO: Add library dependencies to rootfs
+export SYSROOT=$(aarch64-none-linux-gnu-gcc -print-sysroot)
+cd $SYSROOT
+ls -l lib/ld-linux-aarch64.so.1
+ls -l lib64/libm.so.6
+ls -l lib64/libresolv.so.2
+ls -l lib64/libc.so.6 lib
+
+cd ${OUTDIR}/rootfs
+cp -L $SYSROOT/lib/ld-linux-aarch64.so.1 lib
+cp -L $SYSROOT/lib64/libm.so.6 lib64
+cp -L $SYSROOT/lib64/libresolv.so.2 lib64
+cp -L $SYSROOT/lib64/libc.so.6 lib64
 
 # TODO: Make device nodes
+sudo mknod -m 666 dev/null c 1 3
+sudo mknod -m 600 dev/console c 5 1
 
 # TODO: Clean and build the writer utility
+cd /home/shrikant/assignments-3-and-later-shni9045/finder-app
+make clean
+make CROSS_COMPILE=${CROSS_COMPILE}
 
 # TODO: Copy the finder related scripts and executables to the /home directory
 # on the target rootfs
+cp -r /home/shrikant/assignments-3-and-later-shni9045/finder-app/conf/ ${OUTDIR}/rootfs/home
+cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/finder-test.sh ${OUTDIR}/rootfs/home
+cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/finder.sh ${OUTDIR}/rootfs/home
+cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/writer ${OUTDIR}/rootfs/home
+cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/writer.sh ${OUTDIR}/rootfs/home
+cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/writer.c ${OUTDIR}/rootfs/home
+cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/makefile ${OUTDIR}/rootfs/home
+cp  /home/shrikant/assignments-3-and-later-shni9045/finder-app/autorun-qemu.sh ${OUTDIR}/rootfs/home
 
 # TODO: Chown the root directory
 
+cd ${OUTDIR}/rootfs
+sudo chown -R root:root *
+
 # TODO: Create initramfs.cpio.gz
+
+find . | cpio -H newc -ov --owner root:root > ../initramfs.cpio
+cd ..
+gzip initramfs.cpio
+
