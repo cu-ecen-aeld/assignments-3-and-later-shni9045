@@ -1,6 +1,7 @@
 #!/bin/sh
 # Script outline to install and build kernel.
 # Author: Siddhant Jajoo.
+#Attributes - "Mastering Embedded Linux Programming" Chris Simmonds
 
 set -e
 set -u
