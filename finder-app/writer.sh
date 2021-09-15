@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Check to see if correct number of script parameters are specified
 if [ $# -ne 2 ]

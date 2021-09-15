@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/bin/sh
 
 #
 # Recursive Function to traverse files in a directory and sub-directories
-#
-function processfile() {
+
+processfile() {
 
     for f in $1/*
         do
@@ -17,11 +17,11 @@ function processfile() {
             # Count only the files with matched line/lines 
             if [ $match -gt 0 ]
             then
-                ((numfiles=numfiles+1))
+                numfiles=$(expr $numfiles + 1)
             fi
 
             # Add to global matched line count
-            ((matchlines=matchlines+match))
+            matchlines=$(expr $matchlines + 1)
 
         # Check if it's a sub-directory
         elif [ -d $f ]
@@ -37,7 +37,7 @@ function processfile() {
 #
 # Function to find number of lines matching a string in a file
 #
-function findstr() {
+findstr() {
     
      # Command to give count of number of lines that match a pattern
      grep -c "$1" $2
@@ -73,11 +73,11 @@ else
              # Count only the files with matched line/lines 
             if [ $match -gt 0 ]
             then
-                ((numfiles=numfiles+1))
+                numfiles=$(expr $numfiles + 1)
             fi
 
             # Add to global matched line count
-            ((matchlines=matchlines+match))
+            matchlines=$(expr $matchlines + 1)
 
         # Check if it's a sub-directory
         elif [ -d $file ]
@@ -88,9 +88,9 @@ else
         fi
         done
     else
-        printf "First argument does not represent a directory on the filesystem"
+        printf 'First argument does not represent a directory on the filesystem'
         exit 1
     fi
 
-    printf "The number of files are %d and the number of matching lines are %d" ${numfiles} ${matchlines}
+    printf 'The number of files are %d and the number of matching lines are %d' "${numfiles}" "${matchlines}"
 fi

@@ -98,11 +98,12 @@ int main(int argc,char **argv){
             // Create directory with mkdir command
             system(command);
 
+            free(command);
+
         }
 
         // free temporary path and command strings
         free(path);
-        free(command);
 
     }
 
@@ -111,6 +112,9 @@ int main(int argc,char **argv){
     if ( (fd=open(filepath,O_RDWR | O_TRUNC | O_CREAT,S_IRWXU )) == -1 ){
 
         syslog(LOG_ERR,"Error in opening/creating file\n");
+        // Free Allocated string pointers for filename & string
+        free(filepath);
+        free(str_data);
         return -1;
     }
     
@@ -124,6 +128,9 @@ int main(int argc,char **argv){
        return -1;
 
    }
+    
+    //Close file
+    close(fd);
 
     // Free Allocated string pointers for filename & string
     free(filepath);
