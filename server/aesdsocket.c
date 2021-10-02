@@ -12,12 +12,12 @@
     #include <arpa/inet.h>
     
 
-    #define BUFSIZE 100
+    #define BUFSIZE 2500
 
     #define PORT "9000"
     #define BACKLOG 2
 
-    char* read_buf;
+    char *read_buf,*write_buf;
 
     char ip_string[INET6_ADDRSTRLEN];
 
@@ -28,6 +28,9 @@
     int fd;
 
     int num_bytes;
+    int total_bytes=0;
+
+    ssize_t read_bytes;
 
     struct addrinfo host;
     struct addrinfo *servinfo;
@@ -121,9 +124,6 @@
         sigaddset(&set,SIGINT);
         sigaddset(&set,SIGTERM);
 
-
-        while(1) {
-
         check = listen(sock_t, BACKLOG);
 
         if (check == -1){
@@ -132,6 +132,10 @@
             exit(-1);
 
         }
+
+
+        while(1) {
+
 
         len = sizeof(con_addr);
 
@@ -166,7 +170,6 @@
         }
 
 
-
         check = fork();
         if (check < 0){
 
@@ -184,11 +187,6 @@
 
 
 
-            fd = open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
-            if(fd<0){
-                perror("\nERROR open():");
-                exit(-1);
-            }
             
             // Read till packet is complete
             while(1){
@@ -211,10 +209,36 @@
                     exit(-1);
                 }
 
+
+                fd = open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
+                if(fd<0){
+                    perror("\nERROR open():");
+                    exit(-1);
+                }
+
+
                 wbytes = write(fd,read_buf,strlen(read_buf));
                 if (wbytes == -1){
                     perror("\nERROR write():");
                     exit(-1);
+                }
+
+                total_bytes+=wbytes;
+
+
+
+                write_buf = (char*)malloc(sizeof(char)*BUFSIZE);
+
+                lseek(fd,0,SEEK_SET);
+
+                read_bytes = read(fd,write_buf,BUFSIZE);
+                printf("\nsss%d",total_bytes);
+                // Send packet 
+                //write_buf[total_bytes]='\0';
+                printf("\nfff:%s",write_buf);
+                if (send(newsock_t,write_buf,read_bytes, 0) == -1){
+                perror("send");
+                printf("\n Failure");
                 }
 
                 // Unblock signals to avoid partial write
@@ -223,22 +247,16 @@
                     exit(-1);
                 }
 
-                
-                // Send packet 
-                if (send(newsock_t,read_buf,sizeof(read_buf), 0) == -1){
-                perror("send");
-                printf("\n Failure");
-                }
-
                 //close(newsock_t);
-                //free(read_buf);
+                free(read_buf);
+                free(write_buf);
                 break;
 
             }
 
         }
 
-
+        total_bytes = 0;
         close(newsock_t);
     }
 
