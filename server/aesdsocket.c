@@ -27,7 +27,7 @@ char *read_buf,*write_buf,*temp_buf,*out_buf;
 
 char ip_string[INET6_ADDRSTRLEN];
 
-int check;
+pid_t check;
 int sock_t;
 int newsock_t;
 
@@ -68,13 +68,18 @@ static void sig_handler(int signo){
 
     closelog();
 
+    free(read_buf);
+    free(write_buf);
+
     exit(0);
 
 
 }
 
-int main()
+int main(int argc, char* argv[])
 {
+
+
     socklen_t len;
 
     // To ensure struct is empty
@@ -109,6 +114,7 @@ int main()
     if (check == -1){
 
         perror("\nERROR bind():");
+        freeaddrinfo(servinfo);
         exit(-1);
 
     }
@@ -135,6 +141,8 @@ int main()
     sigaddset(&set,SIGINT);
     sigaddset(&set,SIGTERM);
 
+    freeaddrinfo(servinfo);
+
     check = listen(sock_t, BACKLOG);
 
     if (check == -1){
@@ -147,6 +155,33 @@ int main()
 
     read_buf = (char*)malloc(sizeof(char)*BUFSIZE);
     write_buf = (char*)malloc(sizeof(char)*BUFSIZE);
+
+    if (argc == 2){
+
+        if (!strcmp("-d",argv[1])){
+
+        check = fork();
+        if (check == -1){
+
+            perror("\nERROR fork():");
+            exit(-1);
+        }
+
+        if (check != 0){
+            exit(0);
+        }
+
+        setsid();
+
+        chdir("/");
+
+        open("/dev/null", O_RDWR);
+		dup(0);
+		dup(0);
+
+    }
+
+    }
         
 
 
@@ -185,16 +220,6 @@ int main()
 
     }
 
-
-    check = fork();
-    if (check < 0){
-
-        perror("\nERROR fork():");
-        exit(-1);
-    }
-
-
-    if(!check){
 
         char *ch;
         ssize_t wbytes;
@@ -282,14 +307,7 @@ int main()
             exit(-1);
         }
 
-        //close(newsock_t);
-        //free(read_buf);
-        //free(write_buf);
-        break;
-
-
-    close(newsock_t);
-}
+       close(newsock_t);
 
 }
 
