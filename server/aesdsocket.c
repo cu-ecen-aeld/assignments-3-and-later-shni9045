@@ -23,7 +23,7 @@
 #include <arpa/inet.h>
 
 // macro definition for  buffer size
-#define BUFSIZE 200
+#define BUFSIZE 500
 // macro definiton for port#
 #define PORT "9000"
 // macro definition for pending connections
@@ -83,6 +83,32 @@ static void sig_handler(int signo){
 
 }
 
+void close_graceful(){
+
+      // close listening server socket fd
+    close(sock_t);
+
+    close(newsock_t);
+
+    // close file descriptor
+    close(fd);
+
+    // Delete file
+    if(remove("/var/tmp/aesdsocketdata") != 0){
+        syslog(LOG_ERR,"\nERROR in deleting file");
+    }
+    
+    // close log
+    closelog();
+    
+    // free pointers
+    free(read_buf);
+    free(write_buf);
+    
+
+
+}
+
 int main(int argc, char* argv[])
 {
 
@@ -103,6 +129,7 @@ int main(int argc, char* argv[])
     if (check != 0){
 
         perror("\nERROR ADDRINFO():");
+        close_graceful();
         exit(-1);
 
     }
@@ -113,9 +140,19 @@ int main(int argc, char* argv[])
     if(sock_t == -1) {
 
         perror("\nERROR socket():");
+        close_graceful();
         exit(-1);
 
     }
+
+    int reuse_addr = 1;
+
+    if (setsockopt(sock_t, SOL_SOCKET, SO_REUSEADDR, &reuse_addr, sizeof(int)) == -1) {
+        syslog(LOG_ERR, "setsockopt");
+        close(sock_t);
+        close_graceful();
+        exit(-1);
+    } 
 
     // bind onto the socket
     check = bind(sock_t,servinfo->ai_addr, servinfo->ai_addrlen);
@@ -124,14 +161,20 @@ int main(int argc, char* argv[])
 
         perror("\nERROR bind():");
         freeaddrinfo(servinfo);
+        close_graceful();
         exit(-1);
 
     }
+
+        
+    // free address structure
+    freeaddrinfo(servinfo);
 
     // Setup SIGINT signal handler
     if(signal(SIGINT,sig_handler) == SIG_ERR){
 
         syslog(LOG_ERR,"\nError in setting signals");
+        close_graceful();
         exit(-1);
 
     }
@@ -140,6 +183,7 @@ int main(int argc, char* argv[])
     if(signal(SIGTERM,sig_handler) == SIG_ERR){
 
         syslog(LOG_ERR,"\nError in setting signals");
+        close_graceful();
         exit(-1);
 
     }
@@ -151,9 +195,7 @@ int main(int argc, char* argv[])
     // add the signals to the set
     sigaddset(&set,SIGINT);      
     sigaddset(&set,SIGTERM);     
-    
-    // free address structure
-    freeaddrinfo(servinfo);
+
     
     // lisiten for connections
     check = listen(sock_t, BACKLOG);
@@ -161,6 +203,7 @@ int main(int argc, char* argv[])
     if (check == -1){
 
         perror("\nERROR listen():");
+        close_graceful();
         exit(-1);
 
     }
@@ -178,6 +221,7 @@ int main(int argc, char* argv[])
         if (check == -1){
 
             perror("\nERROR fork():");
+            close_graceful();
             exit(-1);
         }
 
@@ -209,13 +253,13 @@ int main(int argc, char* argv[])
 
     if (newsock_t == -1 ){
         perror("\nERROR accept():");
-        continue;
+        //continue;
         }
 
 
     char *ip_string = inet_ntoa(con_addr.sin_addr);
-    printf("\nAccepted connection from %s",ip_string);
-    //syslog(LOG_DEBUG,"\nAccepted connection from %s",ip_string);
+    //printf("\nAccepted connection from %s",ip_string);
+    syslog(LOG_DEBUG,"\nAccepted connection from %s",ip_string);
     
 
     char *ch;
@@ -228,6 +272,7 @@ int main(int argc, char* argv[])
 
     if(num_bytes == -1){
         perror("ERROR recv():");
+        close_graceful();
         exit(-1);    
 
     }
@@ -243,6 +288,8 @@ int main(int argc, char* argv[])
 
     if(temp_buf == NULL){
         syslog(LOG_ERR,"\nErrror in realloc");
+        close_graceful();
+        exit(-1);
     }
 
     else read_buf = temp_buf;
@@ -257,9 +304,11 @@ int main(int argc, char* argv[])
     
     }
 
+
     // Block signals to avoid partial write
     if (sigprocmask(SIG_BLOCK,&set,NULL) == -1){
         perror("\nERROR sigprocmask():");
+        close_graceful();
         exit(-1);
     }
 
@@ -267,6 +316,7 @@ int main(int argc, char* argv[])
     fd = open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
     if(fd<0){
         perror("\nERROR open():");
+        close_graceful();
         exit(-1);
     }
 
@@ -274,6 +324,7 @@ int main(int argc, char* argv[])
     wbytes = write(fd,read_buf,buff_pos);
     if (wbytes == -1){
         perror("\nERROR write():");
+        close_graceful();
         exit(-1);
     }
     
@@ -296,11 +347,13 @@ int main(int argc, char* argv[])
     // Send packets
     if (send(newsock_t,write_buf,read_bytes, 0) == -1){
     perror("send");
+    close_graceful();
     }
 
     // Unblock signals to avoid partial write
     if (sigprocmask(SIG_UNBLOCK,&set,NULL) == -1){
         perror("\nERROR sigprocmask():");
+        close_graceful();
         exit(-1);
     }
 
