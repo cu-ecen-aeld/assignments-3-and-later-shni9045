@@ -1,3 +1,12 @@
+/*
+*  aesdsocket.c - source file for implementing assignment 5 part 1 functionality
+*  Attributes:
+*  https://beej.us/guide/bgnet/html/
+*  https://stackoverflow.com/questions/12721246/reading-the-socket-buffer
+*  https://stackoverflow.com/questions/8436898/realloc-invalid-next-size-when-reallocating-to-make-space-for-strcat-on-char
+*
+*/
+
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,19 +22,20 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 
-
-#define BUFSIZE 100
-
+// macro definition for  buffer size
+#define BUFSIZE 200
+// macro definiton for port#
 #define PORT "9000"
+// macro definition for pending connections
 #define BACKLOG 2
 
-
+// structure to store file metadata
 struct stat  stat_data;
 int status;
 
+// Buffer declarations
 char *read_buf,*write_buf,*temp_buf,*out_buf;
 
-char ip_string[INET6_ADDRSTRLEN];
 
 pid_t check;
 int sock_t;
@@ -33,22 +43,17 @@ int newsock_t;
 
 int fd;
 
-int buff_loc=0;
+int buff_pos=0;
 int currbuf_size=BUFSIZE;
 
 int num_bytes;
-int total_bytes=0;
 
 ssize_t read_bytes;
 
 struct addrinfo host;
 struct addrinfo *servinfo;
 
-struct sockaddr_storage con_addr;
-
-struct sockaddr *temp_addr;
-
-
+struct sockaddr_in con_addr;
 
 static void sig_handler(int signo){
 
@@ -65,12 +70,14 @@ static void sig_handler(int signo){
     if(remove("/var/tmp/aesdsocketdata") != 0){
         syslog(LOG_ERR,"\nERROR in deleting file");
     }
-
+    
+    // close log
     closelog();
-
+    
+    // free pointers
     free(read_buf);
     free(write_buf);
-
+    
     exit(0);
 
 
@@ -99,7 +106,8 @@ int main(int argc, char* argv[])
         exit(-1);
 
     }
-
+    
+    // open socket
     sock_t = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
     if(sock_t == -1) {
@@ -109,6 +117,7 @@ int main(int argc, char* argv[])
 
     }
 
+    // bind onto the socket
     check = bind(sock_t,servinfo->ai_addr, servinfo->ai_addrlen);
 
     if (check == -1){
@@ -119,15 +128,15 @@ int main(int argc, char* argv[])
 
     }
 
-    // Setup signals
-
+    // Setup SIGINT signal handler
     if(signal(SIGINT,sig_handler) == SIG_ERR){
 
         syslog(LOG_ERR,"\nError in setting signals");
         exit(-1);
 
     }
-
+    
+    // Setup SIGTERM signal handler
     if(signal(SIGTERM,sig_handler) == SIG_ERR){
 
         syslog(LOG_ERR,"\nError in setting signals");
@@ -137,12 +146,16 @@ int main(int argc, char* argv[])
 
     // Setup signal mask
     sigset_t set;
-    sigemptyset(&set);
-    sigaddset(&set,SIGINT);
-    sigaddset(&set,SIGTERM);
+    sigemptyset(&set);           // empty the set
 
+    // add the signals to the set
+    sigaddset(&set,SIGINT);      
+    sigaddset(&set,SIGTERM);     
+    
+    // free address structure
     freeaddrinfo(servinfo);
-
+    
+    // lisiten for connections
     check = listen(sock_t, BACKLOG);
 
     if (check == -1){
@@ -152,10 +165,11 @@ int main(int argc, char* argv[])
 
     }
 
-
+    // allocate memory for buffers
     read_buf = (char*)malloc(sizeof(char)*BUFSIZE);
     write_buf = (char*)malloc(sizeof(char)*BUFSIZE);
-
+    
+    // if correct parameter is passed to code start daemon
     if (argc == 2){
 
         if (!strcmp("-d",argv[1])){
@@ -190,7 +204,7 @@ int main(int argc, char* argv[])
 
     len = sizeof(con_addr);
 
-
+   // accept the connection
     newsock_t = accept(sock_t,(struct sockaddr *)&con_addr,&len);
 
     if (newsock_t == -1 ){
@@ -198,119 +212,103 @@ int main(int argc, char* argv[])
         continue;
         }
 
-    temp_addr = (struct sockaddr *)&con_addr;
 
-    if (temp_addr->sa_family == AF_INET){
+    char *ip_string = inet_ntoa(con_addr.sin_addr);
+    printf("\nAccepted connection from %s",ip_string);
+    //syslog(LOG_DEBUG,"\nAccepted connection from %s",ip_string);
+    
 
-        struct in_addr* con_ip;
-        con_ip = &(((struct sockaddr_in*)servinfo)->sin_addr);
-        inet_ntop(servinfo->ai_family, con_ip,ip_string, sizeof(ip_string));
-            
-        printf("\nAccepted connection from %s",ip_string);
+    char *ch;
+    ssize_t wbytes;
 
-    }
+    buff_pos=0;
 
-    else {
-            
-        struct in6_addr* con_ip;
-        con_ip = &(((struct sockaddr_in6*)servinfo)->sin6_addr);
-        inet_ntop(servinfo->ai_family, con_ip,ip_string, sizeof(ip_string));
-        
-        printf("\nAccepted connection from %s",ip_string);
+    // Read till packet is complete
+    while((num_bytes = recv(newsock_t,read_buf+buff_pos, BUFSIZE, 0))>0){
+
+    if(num_bytes == -1){
+        perror("ERROR recv():");
+        exit(-1);    
 
     }
 
+    buff_pos += num_bytes;
+    
+    // dynamicall increase buffer size for incoming packets
+    if (buff_pos >= currbuf_size){
 
-        char *ch;
-        ssize_t wbytes;
+    currbuf_size+=BUFSIZE;
 
-        buff_loc=0;
+    temp_buf = realloc(read_buf,sizeof(char)*currbuf_size);
 
-        // Read till packet is complete
-        while((num_bytes = recv(newsock_t,read_buf+buff_loc, BUFSIZE, 0))>0){
+    if(temp_buf == NULL){
+        syslog(LOG_ERR,"\nErrror in realloc");
+    }
 
-        if(num_bytes == -1){
-            perror("ERROR recv():");
-            exit(-1);    
+    else read_buf = temp_buf;
+    
+    }
+    
+    // Search for NULL character
+    ch = strchr(read_buf,'\n');
 
-        }
+    if(ch != NULL) break;
+    
+    
+    }
 
-        buff_loc += num_bytes;
+    // Block signals to avoid partial write
+    if (sigprocmask(SIG_BLOCK,&set,NULL) == -1){
+        perror("\nERROR sigprocmask():");
+        exit(-1);
+    }
 
-        if (buff_loc >= currbuf_size){
+    // Open file for writing
+    fd = open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
+    if(fd<0){
+        perror("\nERROR open():");
+        exit(-1);
+    }
 
-        currbuf_size+=BUFSIZE;
+    // Write to file
+    wbytes = write(fd,read_buf,buff_pos);
+    if (wbytes == -1){
+        perror("\nERROR write():");
+        exit(-1);
+    }
+    
+    // Extract file size
+    status = stat("/var/tmp/aesdsocketdata",&stat_data);
+    int si;
+    if (status == 0){
+    si=stat_data.st_size;
 
-        temp_buf = realloc(read_buf,sizeof(char)*currbuf_size);
+    }
 
-        if(temp_buf == NULL){
-            syslog(LOG_ERR,"\nErrror in realloc");
-        }
-
-        else read_buf = temp_buf;
-        
-        }
-
-        ch = strchr(read_buf,'\n');
-
-        if(ch != NULL) break;
-       
-        
-        }
-
-        // Block signals to avoid partial write
-        if (sigprocmask(SIG_BLOCK,&set,NULL) == -1){
-            perror("\nERROR sigprocmask():");
-            exit(-1);
-        }
-
-
-        fd = open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
-        if(fd<0){
-            perror("\nERROR open():");
-            exit(-1);
-        }
-
-
-        wbytes = write(fd,read_buf,buff_loc);
-        if (wbytes == -1){
-            perror("\nERROR write():");
-            exit(-1);
-        }
-
-        total_bytes+=wbytes;
-
-        status = stat("/var/tmp/aesdsocketdata",&stat_data);
-        int si;
-        if (status == 0){
-        si=stat_data.st_size;
-        printf("hhhh%d",si);
-        }
-
-        out_buf=realloc(write_buf,sizeof(char)*si);
-        write_buf=out_buf;
+    out_buf=realloc(write_buf,sizeof(char)*si);
+    write_buf=out_buf;
 
 
-        lseek(fd,0,SEEK_SET);
+    lseek(fd,0,SEEK_SET);
 
-        read_bytes = read(fd,write_buf,si);
-        printf("\nsss%d",total_bytes);
-        printf("\nfff:%s",write_buf);
-        if (send(newsock_t,write_buf,read_bytes, 0) == -1){
-        perror("send");
-        printf("\n Failure");
-        }
+    read_bytes = read(fd,write_buf,si);
+    
+    // Send packets
+    if (send(newsock_t,write_buf,read_bytes, 0) == -1){
+    perror("send");
+    }
 
-        // Unblock signals to avoid partial write
-        if (sigprocmask(SIG_UNBLOCK,&set,NULL) == -1){
-            perror("\nERROR sigprocmask():");
-            exit(-1);
-        }
+    // Unblock signals to avoid partial write
+    if (sigprocmask(SIG_UNBLOCK,&set,NULL) == -1){
+        perror("\nERROR sigprocmask():");
+        exit(-1);
+    }
 
-       close(newsock_t);
+    close(newsock_t);
 
 }
 
 closelog();
 return 0;
+
 }
