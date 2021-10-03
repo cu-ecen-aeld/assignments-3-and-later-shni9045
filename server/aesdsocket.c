@@ -280,7 +280,7 @@ int main(int argc, char* argv[])
     buff_pos += num_bytes;
     
     // dynamicall increase buffer size for incoming packets
-    if (buff_pos >= currbuf_size){
+    //if (buff_pos >= currbuf_size){
 
     currbuf_size+=BUFSIZE;
 
@@ -294,7 +294,7 @@ int main(int argc, char* argv[])
 
     else read_buf = temp_buf;
     
-    }
+    //}
     
     // Search for NULL character
     ch = strchr(read_buf,'\n');
