@@ -23,6 +23,7 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 #include <pthread.h>
+#include <time.h>
 #include "queue.h"
 
 // macro definition for  buffer size
@@ -69,6 +70,69 @@ struct addrinfo host;
 struct addrinfo *servinfo;
 
 struct sockaddr_in con_addr;
+
+typedef struct sigsev_data{
+
+    int fd;
+
+}sigsev_data;
+
+static inline void timespec_add( struct timespec *result,
+                        const struct timespec *ts_1, const struct timespec *ts_2)
+{
+    result->tv_sec = ts_1->tv_sec + ts_2->tv_sec;
+    result->tv_nsec = ts_1->tv_nsec + ts_2->tv_nsec;
+    if( result->tv_nsec > 1000000000L ) {
+        result->tv_nsec -= 1000000000L;
+        result->tv_sec ++;
+    }
+}
+
+static void timer_thread(union sigval sigval){
+
+    struct sigsev_data* td = (struct sigsev_data*) sigval.sival_ptr;
+
+    char buffer[80];
+    time_t rtime;
+    struct tm *info;
+    time(&rtime);
+    info = localtime(&rtime);
+
+    int fd =  open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
+    if(fd<0){
+        perror("\nERROR open():");
+        //close_graceful();
+        exit(-1);
+    }
+
+    if (td->fd != 0 ){
+
+    size_t size = strftime(buffer,80,"%a, %d %b %Y %T %z\n",info);
+    printf("HI\n");
+
+    pthread_mutex_lock(&file_mutex);
+
+    // Write to file
+    int wbytes = write(fd,buffer,size);
+    if (wbytes == -1){
+        perror("\nERROR write():");
+        //close_graceful();
+        exit(-1);
+    }
+
+
+
+    pthread_mutex_unlock(&file_mutex);
+
+
+   }
+
+    td->fd+=1;
+ 
+
+
+
+}
 
 
 void close_graceful(){
@@ -274,7 +338,7 @@ static void sig_handler(int signo){
      // close log
     closelog();
     
-    exit(0);
+    exit(0);      //shutdown
 
 
 }
@@ -283,7 +347,6 @@ int main(int argc, char* argv[])
 {
 
     SLIST_INIT(&head);
-
 
     socklen_t len;
 
@@ -409,7 +472,39 @@ int main(int argc, char* argv[])
 
     }
 
+
     //int num_threads = 0;
+    struct sigevent sev;
+    timer_t timerid;
+
+    sigsev_data td;
+    td.fd = 0;
+
+    memset(&sev,0,sizeof(struct sigevent));
+    /**
+    * Setup a call to timer_thread passing in the td structure as the sigev_value
+    * argument
+    */
+    sev.sigev_notify = SIGEV_THREAD;
+    sev.sigev_value.sival_ptr = &td;
+    sev.sigev_notify_function = timer_thread;
+    if ( timer_create(CLOCK_MONOTONIC,&sev,&timerid) != 0 ) {
+        perror("Error in creating newtimer\n");
+    }
+    struct timespec start_time;
+
+     if ( clock_gettime(CLOCK_MONOTONIC,&start_time) != 0 ) {
+        perror("Error in getting time\n");
+    } 
+
+    struct itimerspec itimerspec;
+    itimerspec.it_interval.tv_sec = 10;
+    itimerspec.it_interval.tv_nsec = 10;
+    timespec_add(&itimerspec.it_value,&start_time,&itimerspec.it_interval);
+    if( timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL ) != 0 ) {
+        perror("Error in setting time\n");
+    } 
+
 
     while(1) {
 
