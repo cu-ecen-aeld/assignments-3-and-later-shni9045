@@ -92,7 +92,7 @@ static void timer_thread(union sigval sigval){
 
     struct sigsev_data* td = (struct sigsev_data*) sigval.sival_ptr;
 
-    char buffer[80];
+    char buffer[100];
     time_t rtime;
     struct tm *info;
     time(&rtime);
@@ -107,8 +107,8 @@ static void timer_thread(union sigval sigval){
 
     //if (td->fd != 0 ){
 
-    size_t size = strftime(buffer,80,"timestamp:%a, %d %b %Y %T %z\n",info);
-    printf("HI\n");
+    size_t size = strftime(buffer,100,"timestamp:%a, %d %b %Y %T %z\n",info);
+    //printf("HI\n");
 
     pthread_mutex_lock(&file_mutex);
 
@@ -120,12 +120,14 @@ static void timer_thread(union sigval sigval){
         exit(-1);
     }
 
-
+    free(info);
 
     pthread_mutex_unlock(&file_mutex);
 
 
   //}
+
+ 
 
     td->fd+=1;
  
@@ -162,6 +164,13 @@ void close_graceful(){
         }
 
 
+    }
+    
+    // free Linked list
+    while(!SLIST_EMPTY(&head)){
+        datap = SLIST_FIRST(&head);
+        SLIST_REMOVE_HEAD(&head,entries);
+        free(datap);
     }
 
      // close log
@@ -333,6 +342,12 @@ static void sig_handler(int signo){
         }
 
 
+    }
+        // free Linked list
+        while(!SLIST_EMPTY(&head)){
+        datap = SLIST_FIRST(&head);
+        SLIST_REMOVE_HEAD(&head,entries);
+        free(datap);
     }
 
      // close log
@@ -525,7 +540,6 @@ int main(int argc, char* argv[])
     char *ip_string = inet_ntoa(con_addr.sin_addr);
     //printf("\nAccepted connection from %s",ip_string);
     syslog(LOG_DEBUG,"\nAccepted connection from %s",ip_string);
-
 
     datap = malloc(sizeof(slist_data_t));
     SLIST_INSERT_HEAD(&head,datap,entries);
