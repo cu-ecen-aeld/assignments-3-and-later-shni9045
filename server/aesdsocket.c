@@ -105,9 +105,9 @@ static void timer_thread(union sigval sigval){
         exit(-1);
     }
 
-    if (td->fd != 0 ){
+    //if (td->fd != 0 ){
 
-    size_t size = strftime(buffer,80,"%a, %d %b %Y %T %z\n",info);
+    size_t size = strftime(buffer,80,"timestamp:%a, %d %b %Y %T %z\n",info);
     printf("HI\n");
 
     pthread_mutex_lock(&file_mutex);
@@ -125,7 +125,7 @@ static void timer_thread(union sigval sigval){
     pthread_mutex_unlock(&file_mutex);
 
 
-   }
+  //}
 
     td->fd+=1;
  
@@ -442,6 +442,38 @@ int main(int argc, char* argv[])
         exit(-1);
 
     }
+
+    struct sigevent sev;
+    timer_t timerid;
+
+    sigsev_data td;
+    td.fd = 0;
+
+    memset(&sev,0,sizeof(struct sigevent));
+    /**
+    * Setup a call to timer_thread passing in the td structure as the sigev_value
+    * argument
+    */
+    sev.sigev_notify = SIGEV_THREAD;
+    sev.sigev_value.sival_ptr = &td;
+    sev.sigev_notify_function = timer_thread;
+    if ( timer_create(CLOCK_MONOTONIC,&sev,&timerid) != 0 ) {
+        perror("Error in creating newtimer\n");
+    }
+    struct timespec start_time;
+
+     if ( clock_gettime(CLOCK_MONOTONIC,&start_time) != 0 ) {
+        perror("Error in getting time\n");
+    } 
+
+    struct itimerspec itimerspec;
+    itimerspec.it_interval.tv_sec = 10;
+    itimerspec.it_interval.tv_nsec = 10;
+    timespec_add(&itimerspec.it_value,&start_time,&itimerspec.it_interval);
+    if( timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL ) != 0 ) {
+        perror("Error in setting time\n");
+    } 
+
     
     // if correct parameter is passed to code start daemon
     if (argc == 2){
@@ -474,36 +506,6 @@ int main(int argc, char* argv[])
 
 
     //int num_threads = 0;
-    struct sigevent sev;
-    timer_t timerid;
-
-    sigsev_data td;
-    td.fd = 0;
-
-    memset(&sev,0,sizeof(struct sigevent));
-    /**
-    * Setup a call to timer_thread passing in the td structure as the sigev_value
-    * argument
-    */
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_value.sival_ptr = &td;
-    sev.sigev_notify_function = timer_thread;
-    if ( timer_create(CLOCK_MONOTONIC,&sev,&timerid) != 0 ) {
-        perror("Error in creating newtimer\n");
-    }
-    struct timespec start_time;
-
-     if ( clock_gettime(CLOCK_MONOTONIC,&start_time) != 0 ) {
-        perror("Error in getting time\n");
-    } 
-
-    struct itimerspec itimerspec;
-    itimerspec.it_interval.tv_sec = 10;
-    itimerspec.it_interval.tv_nsec = 10;
-    timespec_add(&itimerspec.it_value,&start_time,&itimerspec.it_interval);
-    if( timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL ) != 0 ) {
-        perror("Error in setting time\n");
-    } 
 
 
     while(1) {
