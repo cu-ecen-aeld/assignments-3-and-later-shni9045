@@ -27,7 +27,7 @@
 #include "queue.h"
 
 // macro definition for  buffer size
-#define BUFSIZE 500
+#define BUFSIZE 600
 // macro definiton for port#
 #define PORT "9000"
 // macro definition for pending connections
@@ -63,6 +63,8 @@ pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 pid_t check;
 int sock_t;
+
+timer_t timerid;
 
 int newsock_t;
 
@@ -115,14 +117,17 @@ static void timer_thread(union sigval sigval){
     // Write to file
     int wbytes = write(fd,buffer,size);
     if (wbytes == -1){
+        
         perror("\nERROR write():");
         //close_graceful();
         exit(-1);
     }
 
-    free(info);
+    //free(info);
 
     pthread_mutex_unlock(&file_mutex);
+
+    close(fd);
 
 
   //}
@@ -172,6 +177,8 @@ void close_graceful(){
         SLIST_REMOVE_HEAD(&head,entries);
         free(datap);
     }
+
+    timer_delete(timerid);
 
      // close log
     closelog();
@@ -308,6 +315,8 @@ void Send_Receive(void *threadp){
 
     close(threadsock->sock);
 
+    close(fd);
+
     //status true
     threadsock->completion_status = true;
 
@@ -350,6 +359,9 @@ static void sig_handler(int signo){
         free(datap);
     }
 
+
+
+    timer_delete(timerid);
      // close log
     closelog();
     
@@ -459,7 +471,7 @@ int main(int argc, char* argv[])
     }
 
     struct sigevent sev;
-    timer_t timerid;
+
 
     sigsev_data td;
     td.fd = 0;
@@ -541,9 +553,11 @@ int main(int argc, char* argv[])
     //printf("\nAccepted connection from %s",ip_string);
     syslog(LOG_DEBUG,"\nAccepted connection from %s",ip_string);
 
+
     datap = malloc(sizeof(slist_data_t));
     SLIST_INSERT_HEAD(&head,datap,entries);
     datap->threadParams.sock = newsock_t;
+    datap->threadParams.completion_status = false;
     pthread_create(&(datap->threadParams.threaddec),(void*)0,(void*)&Send_Receive,(void*)&(datap->threadParams));
 
     SLIST_FOREACH(datap,&head,entries){
