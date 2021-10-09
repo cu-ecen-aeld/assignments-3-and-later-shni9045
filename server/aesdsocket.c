@@ -37,9 +37,11 @@ typedef struct{
 
     pthread_t threaddec;
     int threadIdx;
+    int fd;
     int sock;
     char* read_buf;
     char* write_buf;
+    sigset_t mask;
     bool completion_status;
 
 }threadParams_t;
@@ -57,7 +59,9 @@ struct slist_data_s{
 slist_data_t *datap = NULL;
 SLIST_HEAD(slisthead,slist_data_s) head;
 
+int shutoff=0;
 
+int fd; 
 
 pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -78,6 +82,9 @@ typedef struct sigsev_data{
     int fd;
 
 }sigsev_data;
+
+
+void close_graceful();
 
 static inline void timespec_add( struct timespec *result,
                         const struct timespec *ts_1, const struct timespec *ts_2)
@@ -100,43 +107,21 @@ static void timer_thread(union sigval sigval){
     time(&rtime);
     info = localtime(&rtime);
 
-    int fd =  open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
-    if(fd<0){
-        perror("\nERROR open():");
-        //close_graceful();
-        exit(-1);
-    }
-
-    //if (td->fd != 0 ){
-
     size_t size = strftime(buffer,100,"timestamp:%a, %d %b %Y %T %z\n",info);
     //printf("HI\n");
 
     pthread_mutex_lock(&file_mutex);
 
     // Write to file
-    int wbytes = write(fd,buffer,size);
+    int wbytes = write(td->fd,buffer,size);
     if (wbytes == -1){
         
         perror("\nERROR write():");
-        //close_graceful();
+        close_graceful();
         exit(-1);
     }
 
-    //free(info);
-
     pthread_mutex_unlock(&file_mutex);
-
-    close(fd);
-
-
-  //}
-
- 
-
-    td->fd+=1;
- 
-
 
 
 }
@@ -144,11 +129,13 @@ static void timer_thread(union sigval sigval){
 
 void close_graceful(){
 
-      // close listening server socket fd
+    shutoff = 1;
+
+    // close listening server socket fd
     close(sock_t);
 
     // close file descriptor
-    //close(fd);
+    close(fd);
 
     // Delete file
     if(remove("/var/tmp/aesdsocketdata") != 0){
@@ -183,15 +170,11 @@ void close_graceful(){
      // close log
     closelog();
     
-
-
 }
 
 
 
 void Send_Receive(void *threadp){
-
-    int fd;
 
     char *ch;
 
@@ -219,7 +202,7 @@ void Send_Receive(void *threadp){
 
 
     // Read till packet is complete
-    while((num_bytes = recv(newsock_t,threadsock->read_buf+buff_pos, BUFSIZE, 0))>0){
+    while((num_bytes = recv(threadsock->sock,threadsock->read_buf+buff_pos, BUFSIZE, 0))>0){
 
     if(num_bytes == -1){
         perror("ERROR recv():");
@@ -255,27 +238,18 @@ void Send_Receive(void *threadp){
     
     }
 
-    /*
-    // Block signals to avoid partial write
-    if (sigprocmask(SIG_BLOCK,&set,NULL) == -1){
+     // Block signals to avoid partial write
+    if (sigprocmask(SIG_BLOCK,&(threadsock->mask),NULL) == -1){
         perror("\nERROR sigprocmask():");
-        close_graceful();
-        exit(-1);
-    }*/
-
-    // mutex lock
-    pthread_mutex_lock(&file_mutex);
-
-    // Open file for writing
-    fd = open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
-    if(fd<0){
-        perror("\nERROR open():");
         close_graceful();
         exit(-1);
     }
 
+    // mutex lock
+    pthread_mutex_lock(&file_mutex);
+
     // Write to file
-    wbytes = write(fd,threadsock->read_buf,buff_pos);
+    wbytes = write(threadsock->fd,threadsock->read_buf,buff_pos);
     if (wbytes == -1){
         perror("\nERROR write():");
         close_graceful();
@@ -294,28 +268,26 @@ void Send_Receive(void *threadp){
     threadsock->write_buf=out_buf;
 
 
-    lseek(fd,0,SEEK_SET);
+    lseek(threadsock->fd,0,SEEK_SET);
 
-    read_bytes = read(fd,threadsock->write_buf,si);
+    read_bytes = read(threadsock->fd,threadsock->write_buf,si);
 
     pthread_mutex_unlock(&file_mutex);
     
     // Send packets
-    if (send(newsock_t,threadsock->write_buf,read_bytes, 0) == -1){
+    if (send(threadsock->sock,threadsock->write_buf,read_bytes, 0) == -1){
     perror("send");
     close_graceful();
     }
 
-    /*// Unblock signals to avoid partial write
-    if (sigprocmask(SIG_UNBLOCK,&set,NULL) == -1){
+    // Unblock signals to avoid partial write
+    if (sigprocmask(SIG_UNBLOCK,&(threadsock->mask),NULL) == -1){
         perror("\nERROR sigprocmask():");
         close_graceful();
         exit(-1);
-    }*/
+    }
 
     close(threadsock->sock);
-
-    close(fd);
 
     //status true
     threadsock->completion_status = true;
@@ -327,45 +299,15 @@ void Send_Receive(void *threadp){
 static void sig_handler(int signo){
 
 
-    // close listening server socket fd
-    close(sock_t);
+    if(signo == SIGINT || signo==SIGTERM){
 
-    // close file descriptor
-    //close(fd);
 
-    // Delete file
-    if(remove("/var/tmp/aesdsocketdata") != 0){
-        syslog(LOG_ERR,"\nERROR in deleting file");
-    }
-    
-    
-    // Cancel threads &free pointers
-    SLIST_FOREACH(datap,&head,entries){
+    shutdown(sock_t,SHUT_RDWR);
 
-        if (datap->threadParams.completion_status != true){
-
-            pthread_cancel(datap->threadParams.threaddec);
-            free(datap->threadParams.read_buf);
-            free(datap->threadParams.write_buf);
-            
-        }
+    shutoff = 1;
 
 
     }
-        // free Linked list
-        while(!SLIST_EMPTY(&head)){
-        datap = SLIST_FIRST(&head);
-        SLIST_REMOVE_HEAD(&head,entries);
-        free(datap);
-    }
-
-
-
-    timer_delete(timerid);
-     // close log
-    closelog();
-    
-    exit(0);      //shutdown
 
 
 }
@@ -470,7 +412,12 @@ int main(int argc, char* argv[])
 
     }
 
-
+    fd =  open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
+    if(fd<0){
+        perror("\nERROR open():");
+        close_graceful();
+        exit(-1);
+    }
     
     // if correct parameter is passed to code start daemon
     if (argc == 2){
@@ -505,7 +452,7 @@ int main(int argc, char* argv[])
 
 
     sigsev_data td;
-    td.fd = 0;
+    td.fd = fd;
 
     memset(&sev,0,sizeof(struct sigevent));
     /**
@@ -534,10 +481,7 @@ int main(int argc, char* argv[])
 
 
 
-    //int num_threads = 0;
-
-
-    while(1) {
+    while(!shutoff) {
 
 
     len = sizeof(con_addr);
@@ -545,21 +489,24 @@ int main(int argc, char* argv[])
    // accept the connection
     newsock_t = accept(sock_t,(struct sockaddr *)&con_addr,&len);
 
+    if(shutoff) break;
+
     if (newsock_t == -1 ){
         perror("\nERROR accept():");
-        //continue;
     }
-
 
     char *ip_string = inet_ntoa(con_addr.sin_addr);
     //printf("\nAccepted connection from %s",ip_string);
     syslog(LOG_DEBUG,"\nAccepted connection from %s",ip_string);
 
 
-    datap = malloc(sizeof(slist_data_t));
+    datap = (slist_data_t*)malloc(sizeof(slist_data_t));
     SLIST_INSERT_HEAD(&head,datap,entries);
     datap->threadParams.sock = newsock_t;
     datap->threadParams.completion_status = false;
+    datap->threadParams.fd=fd;
+    datap->threadParams.mask = set;
+
     pthread_create(&(datap->threadParams.threaddec),(void*)0,(void*)&Send_Receive,(void*)&(datap->threadParams));
 
     SLIST_FOREACH(datap,&head,entries){
@@ -580,7 +527,7 @@ int main(int argc, char* argv[])
 
 }
 
-closelog();
+close_graceful();
 return 0;
 
 }
