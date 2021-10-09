@@ -470,6 +470,37 @@ int main(int argc, char* argv[])
 
     }
 
+
+    
+    // if correct parameter is passed to code start daemon
+    if (argc == 2){
+
+        if (!strcmp("-d",argv[1])){
+
+        check = fork();
+        if (check == -1){
+
+            perror("\nERROR fork():");
+            close_graceful();
+            exit(-1);
+        }
+
+        if (check != 0){
+            exit(0);
+        }
+
+        setsid();
+
+        chdir("/");
+
+        open("/dev/null", O_RDWR);
+		dup(0);
+		dup(0);
+
+    }
+
+    }
+
     struct sigevent sev;
 
 
@@ -501,35 +532,6 @@ int main(int argc, char* argv[])
         perror("Error in setting time\n");
     } 
 
-    
-    // if correct parameter is passed to code start daemon
-    if (argc == 2){
-
-        if (!strcmp("-d",argv[1])){
-
-        check = fork();
-        if (check == -1){
-
-            perror("\nERROR fork():");
-            close_graceful();
-            exit(-1);
-        }
-
-        if (check != 0){
-            exit(0);
-        }
-
-        setsid();
-
-        chdir("/");
-
-        open("/dev/null", O_RDWR);
-		dup(0);
-		dup(0);
-
-    }
-
-    }
 
 
     //int num_threads = 0;
