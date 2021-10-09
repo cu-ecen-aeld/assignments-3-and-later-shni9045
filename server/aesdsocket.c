@@ -115,7 +115,6 @@ static void timer_thread(union sigval sigval){
     // Write to file
     int wbytes = write(td->fd,buffer,size);
     if (wbytes == -1){
-        
         perror("\nERROR write():");
         close_graceful();
         exit(-1);
@@ -173,6 +172,20 @@ void close_graceful(){
 }
 
 
+static void sig_handler(int signo){
+
+
+    if(signo == SIGINT || signo==SIGTERM) {
+
+
+    shutdown(sock_t,SHUT_RDWR);
+
+    shutoff = 1;
+
+    }
+
+}
+
 
 void Send_Receive(void *threadp){
 
@@ -180,16 +193,9 @@ void Send_Receive(void *threadp){
 
     threadParams_t *threadsock = (threadParams_t*)threadp;
 
-    // structure to store file metadata
-    struct stat  stat_data;
-    int status;
-
-
-    int num_bytes,wbytes;
     int buff_pos=0;
 
-
-    ssize_t read_bytes;
+    ssize_t rbytes;
 
     int currbuf_size=BUFSIZE;
 
@@ -200,45 +206,84 @@ void Send_Receive(void *threadp){
     threadsock->read_buf = (char*)malloc(sizeof(char)*BUFSIZE);
     threadsock->write_buf = (char*)malloc(sizeof(char)*BUFSIZE);
 
-
+     
+    int num_bytes,wbytes;
     // Read till packet is complete
     while((num_bytes = recv(threadsock->sock,threadsock->read_buf+buff_pos, BUFSIZE, 0))>0){
-
-    if(num_bytes == -1){
+        
+        
+        if(num_bytes == -1){
         perror("ERROR recv():");
         close_graceful();
-        exit(-1);    
+        exit(-1);
+        
+        }
 
+        buff_pos += num_bytes;
+        
+        // dynamicall increase buffer size for incoming packets
+        if (buff_pos >= currbuf_size){
+
+        currbuf_size+=BUFSIZE;
+
+        temp_buf = realloc(threadsock->read_buf,sizeof(char)*currbuf_size);
+
+        if(temp_buf == NULL){
+            syslog(LOG_ERR,"\nErrror in realloc");
+            close_graceful();
+            exit(-1);
+        }
+
+        else threadsock->read_buf = temp_buf;
+        
+        }
+        
+        // Search for NULL character
+        ch = strchr(threadsock->read_buf,'\n');
+
+        if(ch != NULL) break;
+        
     }
 
-    buff_pos += num_bytes;
-    
-    // dynamicall increase buffer size for incoming packets
-    //if (buff_pos >= currbuf_size){
 
-    currbuf_size+=BUFSIZE;
+    // mutex lock
+    pthread_mutex_lock(&file_mutex);
 
-    temp_buf = realloc(threadsock->read_buf,sizeof(char)*currbuf_size);
-
-    if(temp_buf == NULL){
-        syslog(LOG_ERR,"\nErrror in realloc");
+    // Block signals to avoid partial write
+    if (sigprocmask(SIG_BLOCK,&(threadsock->mask),NULL) == -1){
+        perror("\nERROR sigprocmask():");
         close_graceful();
         exit(-1);
     }
 
-    else threadsock->read_buf = temp_buf;
-    
-    //}
-    
-    // Search for NULL character
-    ch = strchr(threadsock->read_buf,'\n');
-
-    if(ch != NULL) break;
-    
-    
+    // Write to file
+    wbytes = write(threadsock->fd,threadsock->read_buf,buff_pos);
+    if (wbytes == -1){
+        perror("\nERROR write():");
+        close_graceful();
+        exit(-1);
     }
 
-     // Block signals to avoid partial write
+    // Unblock signals to avoid partial write
+    if (sigprocmask(SIG_UNBLOCK,&(threadsock->mask),NULL) == -1){
+        perror("\nERROR sigprocmask():");
+        close_graceful();
+        exit(-1);
+    }
+
+
+    pthread_mutex_unlock(&file_mutex);
+
+
+
+    lseek(threadsock->fd,0,SEEK_SET);
+
+    int index = 0;
+    int drift=0;
+    char single_byte;
+    int outbuf_size = BUFSIZE;
+
+    // Block signals to avoid partial write
     if (sigprocmask(SIG_BLOCK,&(threadsock->mask),NULL) == -1){
         perror("\nERROR sigprocmask():");
         close_graceful();
@@ -248,36 +293,46 @@ void Send_Receive(void *threadp){
     // mutex lock
     pthread_mutex_lock(&file_mutex);
 
-    // Write to file
-    wbytes = write(threadsock->fd,threadsock->read_buf,buff_pos);
-    if (wbytes == -1){
-        perror("\nERROR write():");
-        close_graceful();
-        exit(-1);
-    }
     
-    // Extract file size
-    status = stat("/var/tmp/aesdsocketdata",&stat_data);
-    int si;
-    if (status == 0){
-    si=stat_data.st_size;
+    // Read one byte at a time from file until new line is found 
+    // and send packet by packet with realloc if necessary 
+    while((rbytes = read(threadsock->fd,&single_byte,1)) > 0){
 
-    }
+        if(rbytes <0 ) {
 
-    out_buf=realloc(threadsock->write_buf,sizeof(char)*si);
-    threadsock->write_buf=out_buf;
+             perror("\nERROR sigprocmask():");
+             close_graceful();
+             exit(-1);
+
+        }
+
+        threadsock->write_buf[index] = single_byte;
+
+        if(threadsock->write_buf[index] == '\n'){
+
+            // Send packets
+            int packet_size = index - drift + 1;
+
+            if (send(threadsock->sock,threadsock->write_buf+drift,packet_size, 0) == -1){ 
+                perror("send");
+                close_graceful();
+            }
+
+            drift = index + 1;
+
+        }
+
+        index++;
+
+        if(index >= outbuf_size){
+            
+            outbuf_size += BUFSIZE;
+            out_buf=realloc(threadsock->write_buf,sizeof(char)*outbuf_size);
+            threadsock->write_buf=out_buf;
+
+        }
 
 
-    lseek(threadsock->fd,0,SEEK_SET);
-
-    read_bytes = read(threadsock->fd,threadsock->write_buf,si);
-
-    pthread_mutex_unlock(&file_mutex);
-    
-    // Send packets
-    if (send(threadsock->sock,threadsock->write_buf,read_bytes, 0) == -1){
-    perror("send");
-    close_graceful();
     }
 
     // Unblock signals to avoid partial write
@@ -286,6 +341,10 @@ void Send_Receive(void *threadp){
         close_graceful();
         exit(-1);
     }
+
+
+    pthread_mutex_unlock(&file_mutex);
+
 
     close(threadsock->sock);
 
@@ -296,21 +355,7 @@ void Send_Receive(void *threadp){
     free(threadsock->write_buf);
 }
 
-static void sig_handler(int signo){
 
-
-    if(signo == SIGINT || signo==SIGTERM){
-
-
-    shutdown(sock_t,SHUT_RDWR);
-
-    shutoff = 1;
-
-
-    }
-
-
-}
 
 int main(int argc, char* argv[])
 {
@@ -331,22 +376,18 @@ int main(int argc, char* argv[])
     check = getaddrinfo(NULL, PORT, &host, &servinfo);
 
     if (check != 0){
-
-        perror("\nERROR ADDRINFO():");
+       perror("\nERROR ADDRINFO():");
         close_graceful();
         exit(-1);
-
     }
     
     // open socket
     sock_t = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
     if(sock_t == -1) {
-
         perror("\nERROR socket():");
         close_graceful();
         exit(-1);
-
     }
 
     int reuse_addr = 1;
@@ -362,12 +403,10 @@ int main(int argc, char* argv[])
     check = bind(sock_t,servinfo->ai_addr, servinfo->ai_addrlen);
 
     if (check == -1){
-
         perror("\nERROR bind():");
         freeaddrinfo(servinfo);
         close_graceful();
         exit(-1);
-
     }
 
         
@@ -376,20 +415,16 @@ int main(int argc, char* argv[])
 
     // Setup SIGINT signal handler
     if(signal(SIGINT,sig_handler) == SIG_ERR){
-
         syslog(LOG_ERR,"\nError in setting signals");
         close_graceful();
         exit(-1);
-
     }
     
     // Setup SIGTERM signal handler
     if(signal(SIGTERM,sig_handler) == SIG_ERR){
-
         syslog(LOG_ERR,"\nError in setting signals");
         close_graceful();
         exit(-1);
-
     }
 
     // Setup signal mask
@@ -450,7 +485,6 @@ int main(int argc, char* argv[])
 
     struct sigevent sev;
 
-
     sigsev_data td;
     td.fd = fd;
 
@@ -474,7 +508,9 @@ int main(int argc, char* argv[])
     struct itimerspec itimerspec;
     itimerspec.it_interval.tv_sec = 10;
     itimerspec.it_interval.tv_nsec = 10;
+
     timespec_add(&itimerspec.it_value,&start_time,&itimerspec.it_interval);
+
     if( timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL ) != 0 ) {
         perror("Error in setting time\n");
     } 
@@ -510,7 +546,7 @@ int main(int argc, char* argv[])
     pthread_create(&(datap->threadParams.threaddec),(void*)0,(void*)&Send_Receive,(void*)&(datap->threadParams));
 
     SLIST_FOREACH(datap,&head,entries){
-
+        
         if(datap->threadParams.completion_status == false){
 
             continue;
