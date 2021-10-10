@@ -38,11 +38,13 @@
 */
 typedef struct{
 
-    pthread_t threaddec;  
-    int threadIdx;
-    int fd;
-    int sock;
-    char* read_buf;
+    pthread_t threaddec;               // thread definition
+    int threadIdx;                     // thread ID
+    int fd;                            // writing file descriptor
+    int sock;                          // client scoket
+    
+    // Read & Write buffers
+    char* read_buf;                    
     char* write_buf;
     sigset_t mask;
 
@@ -52,7 +54,7 @@ typedef struct{
 }threadParams_t;
 
 
-
+// Singly Linked list data strcuture
 typedef struct slist_data_s slist_data_t;
 struct slist_data_s{
 
@@ -64,10 +66,12 @@ struct slist_data_s{
 slist_data_t *datap = NULL;
 SLIST_HEAD(slisthead,slist_data_s) head;
 
+// Variable to start or stop accepting connections
 int shutoff=0;
 
 int fd; 
 
+// mutex to protect concurrent file access
 pthread_mutex_t file_mutex;
 
 pid_t check;
@@ -103,6 +107,11 @@ static inline void timespec_add( struct timespec *result,
     }
 }
 
+
+/*
+* SIGSEV_THREAD to write timestamp to file every 10 seconds
+*
+*/
 static void timer_thread(union sigval sigval){
 
     struct sigsev_data* td = (struct sigsev_data*) sigval.sival_ptr;
@@ -111,11 +120,16 @@ static void timer_thread(union sigval sigval){
     time_t rtime;
     struct tm *info;
     time(&rtime);
-    info = localtime(&rtime);
+    info = localtime(&rtime);                // Read realtime
 
     size_t size = strftime(buffer,100,"timestamp:%a, %d %b %Y %T %z\n",info);
 
-    pthread_mutex_lock(&file_mutex);
+    if (pthread_mutex_lock(&file_mutex) != 0){
+
+        perror("Error locking muetx:");
+        close_graceful();
+        exit(-1);
+    }
 
     // Write to file
     int wbytes = write(td->fd,buffer,size);
@@ -125,8 +139,12 @@ static void timer_thread(union sigval sigval){
         exit(-1);
     }
 
-    pthread_mutex_unlock(&file_mutex);
+    if (pthread_mutex_unlock(&file_mutex) != 0){
 
+        perror("Error ulocking muetx:");
+        close_graceful();
+        exit(-1);
+    }
 
 }
 
@@ -169,9 +187,9 @@ void close_graceful(){
         free(datap);
     }
 
-    pthread_mutex_destroy(&file_mutex);
+    pthread_mutex_destroy(&file_mutex);                       // destroy mutex
 
-    timer_delete(timerid);
+    timer_delete(timerid);                                    // delete timer
 
      // close log
     closelog();
@@ -189,6 +207,7 @@ static void sig_handler(int signo){
 
     shutoff = 1;
 
+    
     }
 
 }
@@ -254,7 +273,13 @@ void Send_Receive(void *threadp){
 
 
     // mutex lock
-    pthread_mutex_lock( threadsock->lock);
+    if (pthread_mutex_lock( threadsock->lock) != 0){
+
+        perror("Error locking muetx:");
+        close_graceful();
+        exit(-1);
+
+    }
 
     // Block signals to avoid partial write
     if (sigprocmask(SIG_BLOCK,&(threadsock->mask),NULL) == -1){
@@ -279,7 +304,13 @@ void Send_Receive(void *threadp){
     }
 
 
-    pthread_mutex_unlock(threadsock->lock);
+    if(pthread_mutex_unlock(threadsock->lock) != 0){
+
+        perror("Error locking muetx:");
+        close_graceful();
+        exit(-1);
+
+    }
 
 
 
@@ -298,7 +329,13 @@ void Send_Receive(void *threadp){
     }
 
     // mutex lock
-    pthread_mutex_lock( threadsock->lock);
+    if (pthread_mutex_lock( threadsock->lock) != 0){
+
+        perror("Error locking muetx:");
+        close_graceful();
+        exit(-1);
+
+    }
 
     
     // Read one byte at a time from file until new line is found 
@@ -350,7 +387,12 @@ void Send_Receive(void *threadp){
     }
 
 
-    pthread_mutex_unlock(threadsock->lock);
+    if (pthread_mutex_unlock(threadsock->lock) != 0){
+
+        perror("Error locking muetx:");
+        close_graceful();
+        exit(-1);
+    }
 
 
     close(threadsock->sock);
@@ -502,7 +544,9 @@ int main(int argc, char* argv[])
     td.fd = fd;
 
     memset(&sev,0,sizeof(struct sigevent));
-    /**
+
+
+    /*
     * Setup a call to timer_thread passing in the td structure as the sigev_value
     * argument
     */
@@ -523,7 +567,8 @@ int main(int argc, char* argv[])
     itimerspec.it_interval.tv_nsec = 0;
 
     timespec_add(&itimerspec.it_value,&start_time,&itimerspec.it_interval);
-
+    
+    // start timer in child
     if( timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL ) != 0 ) {
         perror("Error in setting time\n");
     } 
@@ -548,27 +593,35 @@ int main(int argc, char* argv[])
     //printf("\nAccepted connection from %s",ip_string);
     syslog(LOG_DEBUG,"\nAccepted connection from %s",ip_string);
 
-
+    // Assign value to thread meta data structure members
     datap = (slist_data_t*)malloc(sizeof(slist_data_t));
-    SLIST_INSERT_HEAD(&head,datap,entries);
+    SLIST_INSERT_HEAD(&head,datap,entries);                                          // add to linked list
     datap->threadParams.sock = newsock_t;
     datap->threadParams.completion_status = false;
     datap->threadParams.fd=fd;
     datap->threadParams.mask = set;
     datap->threadParams.lock = &file_mutex;
+    
 
-    pthread_create(&(datap->threadParams.threaddec),(void*)0,(void*)&Send_Receive,(void*)&(datap->threadParams));
+    // Spawn threads fro each new connection
+    if (pthread_create(&(datap->threadParams.threaddec),(void*)0,(void*)&Send_Receive,(void*)&(datap->threadParams)) != 0){
+
+        perror("Error creating thread:");
+        close_graceful();
+        exit(-1);
+    }
 
     SLIST_FOREACH(datap,&head,entries){
         
         if(datap->threadParams.completion_status == false){
 
-            continue;
+            continue;                           //continue accepting connections
 
         }
 
         else if (datap->threadParams.completion_status == true){
-
+            
+            // Join completed threads
             pthread_join(datap->threadParams.threaddec,NULL);
 
         }
