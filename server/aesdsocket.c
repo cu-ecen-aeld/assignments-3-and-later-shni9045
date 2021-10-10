@@ -213,7 +213,7 @@ static void sig_handler(int signo){
 }
 
 
-void Send_Receive(void *threadp){
+void* Send_Receive(void *threadp){
 
     char *ch;
 
@@ -397,11 +397,15 @@ void Send_Receive(void *threadp){
 
     close(threadsock->sock);
 
-    //status true
-    threadsock->completion_status = true;
 
     free(threadsock->read_buf);
     free(threadsock->write_buf);
+
+
+    //status true
+    threadsock->completion_status = true;
+
+    return threadp;
 }
 
 
@@ -573,7 +577,7 @@ int main(int argc, char* argv[])
         perror("Error in setting time\n");
     } 
 
-
+    slist_data_t *temp_node = NULL;
 
     while(!shutoff) {
 
@@ -604,14 +608,14 @@ int main(int argc, char* argv[])
     
 
     // Spawn threads fro each new connection
-    if (pthread_create(&(datap->threadParams.threaddec),(void*)0,(void*)&Send_Receive,(void*)&(datap->threadParams)) != 0){
+    if (pthread_create(&(datap->threadParams.threaddec),(void*)0,&Send_Receive,(void*)&(datap->threadParams)) != 0){
 
         perror("Error creating thread:");
         close_graceful();
         exit(-1);
     }
 
-    SLIST_FOREACH(datap,&head,entries){
+    SLIST_FOREACH_SAFE(datap,&head,entries,temp_node ){
         
         if(datap->threadParams.completion_status == false){
 
@@ -620,10 +624,23 @@ int main(int argc, char* argv[])
         }
 
         else if (datap->threadParams.completion_status == true){
-            
-            // Join completed threads
-            pthread_join(datap->threadParams.threaddec,NULL);
 
+            int test_join = 0;
+
+            test_join = pthread_join(datap->threadParams.threaddec,NULL);
+            
+           // Join completed threads
+            if (test_join  != 0) {
+                
+                errno = test_join;
+                perror("Error Joining:");
+                close_graceful();
+                exit(-1);
+            }
+
+            SLIST_REMOVE(&head,datap,slist_data_s,entries);
+            free(datap);
+            datap=NULL;
         }
 
     }
