@@ -33,15 +33,20 @@
 // macro definition for pending connections
 #define BACKLOG 1000
 
+/*
+*   Structure to hold metadata associated with file
+*/
 typedef struct{
 
-    pthread_t threaddec;
+    pthread_t threaddec;  
     int threadIdx;
     int fd;
     int sock;
     char* read_buf;
     char* write_buf;
     sigset_t mask;
+
+    pthread_mutex_t *lock;
     bool completion_status;
 
 }threadParams_t;
@@ -63,7 +68,7 @@ int shutoff=0;
 
 int fd; 
 
-pthread_mutex_t file_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t file_mutex;
 
 pid_t check;
 int sock_t;
@@ -77,9 +82,10 @@ struct addrinfo *servinfo;
 
 struct sockaddr_in con_addr;
 
+// Data structure for SIGSEV_THREAD with POSIX timer
 typedef struct sigsev_data{
 
-    int fd;
+    int fd;            // file descriptor
 
 }sigsev_data;
 
@@ -108,7 +114,6 @@ static void timer_thread(union sigval sigval){
     info = localtime(&rtime);
 
     size_t size = strftime(buffer,100,"timestamp:%a, %d %b %Y %T %z\n",info);
-    //printf("HI\n");
 
     pthread_mutex_lock(&file_mutex);
 
@@ -164,6 +169,8 @@ void close_graceful(){
         free(datap);
     }
 
+    pthread_mutex_destroy(&file_mutex);
+
     timer_delete(timerid);
 
      // close log
@@ -205,7 +212,7 @@ void Send_Receive(void *threadp){
     // allocate read write buffers
     threadsock->read_buf = (char*)malloc(sizeof(char)*BUFSIZE);
     threadsock->write_buf = (char*)malloc(sizeof(char)*BUFSIZE);
-
+    
      
     int num_bytes,wbytes;
     // Read till packet is complete
@@ -247,7 +254,7 @@ void Send_Receive(void *threadp){
 
 
     // mutex lock
-    pthread_mutex_lock(&file_mutex);
+    pthread_mutex_lock( threadsock->lock);
 
     // Block signals to avoid partial write
     if (sigprocmask(SIG_BLOCK,&(threadsock->mask),NULL) == -1){
@@ -272,7 +279,7 @@ void Send_Receive(void *threadp){
     }
 
 
-    pthread_mutex_unlock(&file_mutex);
+    pthread_mutex_unlock(threadsock->lock);
 
 
 
@@ -291,7 +298,7 @@ void Send_Receive(void *threadp){
     }
 
     // mutex lock
-    pthread_mutex_lock(&file_mutex);
+    pthread_mutex_lock( threadsock->lock);
 
     
     // Read one byte at a time from file until new line is found 
@@ -343,7 +350,7 @@ void Send_Receive(void *threadp){
     }
 
 
-    pthread_mutex_unlock(&file_mutex);
+    pthread_mutex_unlock(threadsock->lock);
 
 
     close(threadsock->sock);
@@ -359,6 +366,12 @@ void Send_Receive(void *threadp){
 
 int main(int argc, char* argv[])
 {
+
+    if (pthread_mutex_init(&file_mutex,NULL) != 0){
+        perror("Error mutex init():");
+        close_graceful();
+        exit(-1);
+    } 
 
     SLIST_INIT(&head);
 
@@ -542,6 +555,7 @@ int main(int argc, char* argv[])
     datap->threadParams.completion_status = false;
     datap->threadParams.fd=fd;
     datap->threadParams.mask = set;
+    datap->threadParams.lock = &file_mutex;
 
     pthread_create(&(datap->threadParams.threaddec),(void*)0,(void*)&Send_Receive,(void*)&(datap->threadParams));
 
