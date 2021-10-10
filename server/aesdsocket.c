@@ -507,7 +507,7 @@ int main(int argc, char* argv[])
 
     struct itimerspec itimerspec;
     itimerspec.it_interval.tv_sec = 10;
-    itimerspec.it_interval.tv_nsec = 10;
+    itimerspec.it_interval.tv_nsec = 0;
 
     timespec_add(&itimerspec.it_value,&start_time,&itimerspec.it_interval);
 
