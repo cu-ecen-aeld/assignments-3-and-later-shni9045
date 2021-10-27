@@ -158,21 +158,21 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
 
 void clean_aesd_buffer(struct aesd_circular_buffer* buffer){
 
-    struct aesd_buffer_entry *element;
+    struct aesd_buffer_entry *entry;
 	uint8_t index;
 
 
-	AESD_CIRCULAR_BUFFER_FOREACH(element,buffer,index) 
+	AESD_CIRCULAR_BUFFER_FOREACH(entry,buffer,index) 
 	{
 
-		if (element->buffptr != NULL)
+		if (entry->buffptr != NULL)
 		{
 
 #ifndef __KERNEL__
 		
-		free((void*)element->buffptr);	
+		free((void*)entry->buffptr);	
 #else
-		kfree(element->buffptr);
+		kfree(entry->buffptr);
 		
 		
 #endif
