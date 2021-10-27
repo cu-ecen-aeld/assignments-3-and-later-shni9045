@@ -21,6 +21,7 @@ struct aesd_dev aesd_device;
 int aesd_open(struct inode *inode, struct file *filp)
 {
     struct aesd_dev *aesddevice;
+
 	PDEBUG("open");
 	/**
 	 * TODO: handle open
@@ -161,8 +162,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 	{
 		
 		aesddevice->bufferentry.buffptr = kmalloc(count*sizeof(char), GFP_KERNEL);  
-		memset(aesddevice->bufferentry.buffptr,0,count*sizeof(char));
-		
+
 		if ( !aesddevice->bufferentry.buffptr)  
 		{
 		
@@ -264,7 +264,7 @@ int aesd_init_module(void)
 	 * TODO: initialize the AESD specific portion of the device
 	 */
 
-	// initialize the mutex
+
 	mutex_init(&aesd_device.mutex_lock);	
 
 	result = aesd_setup_cdev(&aesd_device);

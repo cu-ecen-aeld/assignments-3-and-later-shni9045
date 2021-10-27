@@ -52,7 +52,6 @@ typedef struct{
 
     pthread_t threaddec;               // thread definition
     int threadIdx;                     // thread ID
-    int fd;                            // writing file descriptor
     int sock;                          // client scoket
     
     // Read & Write buffers
@@ -81,7 +80,6 @@ SLIST_HEAD(slisthead,slist_data_s) head;
 // Variable to start or stop accepting connections
 int shutoff=0;
 
-int fd; 
 
 // mutex to protect concurrent file access
 pthread_mutex_t file_mutex;
@@ -128,8 +126,6 @@ void close_graceful(){
     // close listening server socket fd
     close(sock_t);
 
-    // close file descriptor
-    close(fd);
 
     // Delete file
     if(remove(FILE) != 0){
@@ -194,6 +190,8 @@ void* Send_Receive(void *threadp){
     ssize_t rbytes;
 
     int currbuf_size=BUFSIZE;
+    
+    int fd; 
 
     // Buffer declarations
     char *temp_buf,*out_buf;
@@ -201,7 +199,14 @@ void* Send_Receive(void *threadp){
     // allocate read write buffers
     threadsock->read_buf = (char*)malloc(sizeof(char)*BUFSIZE);
     threadsock->write_buf = (char*)malloc(sizeof(char)*BUFSIZE);
-    
+
+
+    fd =  open(FILE ,O_RDWR|O_CREAT|O_TRUNC,S_IRWXU);
+    if(fd<0){
+        perror("\nERROR open():");
+        close_graceful();
+        exit(-1);
+    }
      
     int num_bytes,wbytes;
     // Read till packet is complete
@@ -259,7 +264,7 @@ void* Send_Receive(void *threadp){
     }
 
     // Write to file
-    wbytes = write(threadsock->fd,threadsock->read_buf,buff_pos);
+    wbytes = write(fd,threadsock->read_buf,buff_pos);
     if (wbytes == -1){
         perror("\nERROR write():");
         close_graceful();
@@ -283,8 +288,10 @@ void* Send_Receive(void *threadp){
     }
 
 
+#ifdef USE_AESD_CHAR_DEVICE
+        lseek(fd,0,SEEK_SET);
+#endif
 
-    lseek(threadsock->fd,0,SEEK_SET);
 
     int index = 0;
     int drift=0;
@@ -310,7 +317,7 @@ void* Send_Receive(void *threadp){
     
     // Read one byte at a time from file until new line is found 
     // and send packet by packet with realloc if necessary 
-    while((rbytes = read(threadsock->fd,&single_byte,1)) > 0){
+    while((rbytes = read(fd,&single_byte,1)) > 0){
 
         if(rbytes <0 ) {
 
@@ -364,6 +371,8 @@ void* Send_Receive(void *threadp){
         exit(-1);
     }
 
+    // close file descriptor
+    close(fd);
 
     close(threadsock->sock);
 
@@ -476,12 +485,7 @@ int main(int argc, char* argv[])
 
     }
 
-    fd =  open(FILE ,O_RDWR|O_CREAT|O_TRUNC,S_IRWXU);
-    if(fd<0){
-        perror("\nERROR open():");
-        close_graceful();
-        exit(-1);
-    }
+
     
     // if correct parameter is passed to code start daemon
     if (argc == 2){
@@ -538,7 +542,6 @@ int main(int argc, char* argv[])
     SLIST_INSERT_HEAD(&head,datap,entries);                                          // add to linked list
     datap->threadParams.sock = newsock_t;
     datap->threadParams.completion_status = false;
-    datap->threadParams.fd=fd;
     datap->threadParams.mask = set;
     datap->threadParams.lock = &file_mutex;
     
