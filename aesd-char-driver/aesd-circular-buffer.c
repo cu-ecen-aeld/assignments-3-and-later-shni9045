@@ -47,6 +47,8 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 
    int offset_possible = 0;                            // Variable to track if offset is possible
 
+   uint8_t helper_index=0;                              // Variable to limit iteration over buffer
+
    // Logic if offset with first byte is asked
    if (char_offset == 0 ){
 
@@ -57,7 +59,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
    }
 
    index  = buffer->out_offs;
-   uint8_t helper_index=0;                              // Variable to limit iteration over buffer
+
 
    // Iterate with wrapping around index upon update
    for(entry_ptr=&((buffer)->entry[index]); \
@@ -105,11 +107,19 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char* aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     /**
     * TODO: implement per description 
     */
+   const char* temp_entry = NULL;
+
+
+	if(buffer->full == true){
+		
+		temp_entry = buffer->entry[buffer->out_offs].buffptr;
+
+	}
 
    // Store new entry at current write location in structure
    buffer->entry[buffer->in_offs] = *add_entry;
@@ -131,6 +141,8 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
 
    }
 
+   return temp_entry;
+
 }
 
 /**
@@ -141,10 +153,32 @@ void aesd_circular_buffer_init(struct aesd_circular_buffer *buffer)
     
     memset(buffer,0,sizeof(struct aesd_circular_buffer));
 
-    buffer->in_offs = 0;                  // Initialize location for next write
-    buffer->out_offs = 0;                 // Initialize location for next read
 
-    buffer->full = false;                 // Set buffer full status as to empty initially
+}
 
+void clean_aesd_buffer(struct aesd_circular_buffer* buffer){
+
+    struct aesd_buffer_entry *element;
+	uint8_t index;
+
+
+	AESD_CIRCULAR_BUFFER_FOREACH(element,buffer,index) 
+	{
+
+		if (element->buffptr != NULL)
+		{
+
+#ifndef __KERNEL__
+		
+		free((void*)element->buffptr);	
+#else
+		kfree(element->buffptr);
+		
+		
+#endif
+         }
+
+	}
+	
 
 }

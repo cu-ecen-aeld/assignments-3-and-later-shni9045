@@ -1,10 +1,3 @@
-/*
- * aesdchar.h
- *
- *  Created on: Oct 23, 2019
- *      Author: Dan Walkes
- */
-
 #ifndef AESD_CHAR_DRIVER_AESDCHAR_H_
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
 
@@ -23,12 +16,17 @@
 #  define PDEBUG(fmt, args...) /* not debugging: nothing */
 #endif
 
+
 struct aesd_dev
 {
 	/**
 	 * TODO: Add structure(s) and locks needed to complete assignment requirements
 	 */
 	struct cdev cdev;	  /* Char device structure		*/
+	struct aesd_circular_buffer circularbuffer;
+	struct aesd_buffer_entry bufferentry;
+	struct mutex mutex_lock;
+	
 };
 
 
