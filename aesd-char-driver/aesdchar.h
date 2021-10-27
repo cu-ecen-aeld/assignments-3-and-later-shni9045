@@ -1,3 +1,12 @@
+/*
+ * aesdchar.h
+ *
+ *  Created on: Oct 23, 2019
+ *      Author: Dan Walkes
+ */
+
+// Attributes - https://stackoverflow.com/questions/59000547/clear-buffer-user-data-before-doing-another-write-on-a-linux-device-driver
+
 #ifndef AESD_CHAR_DRIVER_AESDCHAR_H_
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
 
@@ -18,7 +27,12 @@
 
 
 struct aesd_dev
-{
+/*
+ * aesdchar.h
+ *
+ *  Created on: Oct 23, 2019
+ *      Author: Dan Walkes
+ */{
 	/**
 	 * TODO: Add structure(s) and locks needed to complete assignment requirements
 	 */

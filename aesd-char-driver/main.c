@@ -1,3 +1,19 @@
+
+/**
+ * @file aesdchar.c
+ * @brief Functions and data related to the AESD char driver implementation
+ *
+ * Based on the implementation of the "scull" device driver, found in
+ * Linux Device Drivers example code.
+ *
+ * @author Dan Walkes
+ * @date 2019-10-22
+ * @copyright Copyright (c) 2019
+ *
+ */
+
+// Attributes - https://stackoverflow.com/questions/59000547/clear-buffer-user-data-before-doing-another-write-on-a-linux-device-driver
+
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/printk.h>
