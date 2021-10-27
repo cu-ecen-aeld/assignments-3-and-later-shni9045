@@ -12,7 +12,13 @@
  *
  */
 
-// Attributes - https://stackoverflow.com/questions/59000547/clear-buffer-user-data-before-doing-another-write-on-a-linux-device-driver
+/*
+* Modified - @author Shrikant Nimhan 
+*
+* Attributes -  https://embeddedartistry.com/blog/2017/05/17/creating-a-circular-buffer-in-c-and-c/
+*               https://stackoverflow.com/questions/59000547/clear-buffer-user-data-before-doing-another-write-on-a-linux-device-driver
+*/
+
 
 #include <linux/module.h>
 #include <linux/init.h>
@@ -273,7 +279,7 @@ int aesd_init_module(void)
 		return result;
 	}
 
-	// This inits c_buff to zero. Need not do aesd_circular_buffer_init()
+	
 	memset(&aesd_device,0,sizeof(struct aesd_dev));
 
 	/**

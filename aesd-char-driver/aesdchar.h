@@ -5,7 +5,12 @@
  *      Author: Dan Walkes
  */
 
-// Attributes - https://stackoverflow.com/questions/59000547/clear-buffer-user-data-before-doing-another-write-on-a-linux-device-driver
+/*
+* Modified - @author Shrikant Nimhan 
+*
+* Attributes -  https://embeddedartistry.com/blog/2017/05/17/creating-a-circular-buffer-in-c-and-c/
+*               https://stackoverflow.com/questions/59000547/clear-buffer-user-data-before-doing-another-write-on-a-linux-device-driver
+*/
 
 #ifndef AESD_CHAR_DRIVER_AESDCHAR_H_
 #define AESD_CHAR_DRIVER_AESDCHAR_H_
