@@ -26,6 +26,18 @@
 #include <time.h>
 #include "queue.h"
 
+#define USE_AESD_CHAR_DEVICE 1
+
+
+#ifdef USE_AESD_CHAR_DEVICE
+       #define FILE  "/dev/aesdchar"
+#else
+       
+       #define FILE  "/var/tmp/aesdsocketdata"
+       
+#endif
+
+
 // macro definition for  buffer size
 #define BUFSIZE 600
 // macro definiton for port#
@@ -40,7 +52,6 @@ typedef struct{
 
     pthread_t threaddec;               // thread definition
     int threadIdx;                     // thread ID
-    int fd;                            // writing file descriptor
     int sock;                          // client scoket
     
     // Read & Write buffers
@@ -69,7 +80,6 @@ SLIST_HEAD(slisthead,slist_data_s) head;
 // Variable to start or stop accepting connections
 int shutoff=0;
 
-int fd; 
 
 // mutex to protect concurrent file access
 pthread_mutex_t file_mutex;
@@ -77,7 +87,6 @@ pthread_mutex_t file_mutex;
 pid_t check;
 int sock_t;
 
-timer_t timerid;
 
 int newsock_t;
 
@@ -108,45 +117,6 @@ static inline void timespec_add( struct timespec *result,
 }
 
 
-/*
-* SIGSEV_THREAD to write timestamp to file every 10 seconds
-*
-*/
-static void timer_thread(union sigval sigval){
-
-    struct sigsev_data* td = (struct sigsev_data*) sigval.sival_ptr;
-
-    char buffer[100];
-    time_t rtime;
-    struct tm *info;
-    time(&rtime);
-    info = localtime(&rtime);                // Read realtime
-
-    size_t size = strftime(buffer,100,"timestamp:%a, %d %b %Y %T %z\n",info);
-
-    if (pthread_mutex_lock(&file_mutex) != 0){
-
-        perror("Error locking muetx:");
-        close_graceful();
-        exit(-1);
-    }
-
-    // Write to file
-    int wbytes = write(td->fd,buffer,size);
-    if (wbytes == -1){
-        perror("\nERROR write():");
-        close_graceful();
-        exit(-1);
-    }
-
-    if (pthread_mutex_unlock(&file_mutex) != 0){
-
-        perror("Error ulocking muetx:");
-        close_graceful();
-        exit(-1);
-    }
-
-}
 
 
 void close_graceful(){
@@ -156,11 +126,9 @@ void close_graceful(){
     // close listening server socket fd
     close(sock_t);
 
-    // close file descriptor
-    close(fd);
 
     // Delete file
-    if(remove("/var/tmp/aesdsocketdata") != 0){
+    if(remove(FILE) != 0){
         syslog(LOG_ERR,"\nERROR in deleting file");
     }
     
@@ -188,8 +156,6 @@ void close_graceful(){
     }
 
     pthread_mutex_destroy(&file_mutex);                       // destroy mutex
-
-    timer_delete(timerid);                                    // delete timer
 
      // close log
     closelog();
@@ -224,6 +190,8 @@ void* Send_Receive(void *threadp){
     ssize_t rbytes;
 
     int currbuf_size=BUFSIZE;
+    
+    int fd; 
 
     // Buffer declarations
     char *temp_buf,*out_buf;
@@ -231,7 +199,14 @@ void* Send_Receive(void *threadp){
     // allocate read write buffers
     threadsock->read_buf = (char*)malloc(sizeof(char)*BUFSIZE);
     threadsock->write_buf = (char*)malloc(sizeof(char)*BUFSIZE);
-    
+
+
+    fd =  open(FILE ,O_RDWR|O_CREAT|O_TRUNC,S_IRWXU);
+    if(fd<0){
+        perror("\nERROR open():");
+        close_graceful();
+        exit(-1);
+    }
      
     int num_bytes,wbytes;
     // Read till packet is complete
@@ -289,7 +264,7 @@ void* Send_Receive(void *threadp){
     }
 
     // Write to file
-    wbytes = write(threadsock->fd,threadsock->read_buf,buff_pos);
+    wbytes = write(fd,threadsock->read_buf,buff_pos);
     if (wbytes == -1){
         perror("\nERROR write():");
         close_graceful();
@@ -313,8 +288,10 @@ void* Send_Receive(void *threadp){
     }
 
 
+#ifdef USE_AESD_CHAR_DEVICE
+        lseek(fd,0,SEEK_SET);
+#endif
 
-    lseek(threadsock->fd,0,SEEK_SET);
 
     int index = 0;
     int drift=0;
@@ -340,7 +317,7 @@ void* Send_Receive(void *threadp){
     
     // Read one byte at a time from file until new line is found 
     // and send packet by packet with realloc if necessary 
-    while((rbytes = read(threadsock->fd,&single_byte,1)) > 0){
+    while((rbytes = read(fd,&single_byte,1)) > 0){
 
         if(rbytes <0 ) {
 
@@ -394,6 +371,8 @@ void* Send_Receive(void *threadp){
         exit(-1);
     }
 
+    // close file descriptor
+    close(fd);
 
     close(threadsock->sock);
 
@@ -506,12 +485,7 @@ int main(int argc, char* argv[])
 
     }
 
-    fd =  open("/var/tmp/aesdsocketdata",O_RDWR|O_CREAT|O_APPEND,S_IRWXU);
-    if(fd<0){
-        perror("\nERROR open():");
-        close_graceful();
-        exit(-1);
-    }
+
     
     // if correct parameter is passed to code start daemon
     if (argc == 2){
@@ -542,40 +516,6 @@ int main(int argc, char* argv[])
 
     }
 
-    struct sigevent sev;
-
-    sigsev_data td;
-    td.fd = fd;
-
-    memset(&sev,0,sizeof(struct sigevent));
-
-
-    /*
-    * Setup a call to timer_thread passing in the td structure as the sigev_value
-    * argument
-    */
-    sev.sigev_notify = SIGEV_THREAD;
-    sev.sigev_value.sival_ptr = &td;
-    sev.sigev_notify_function = timer_thread;
-    if ( timer_create(CLOCK_MONOTONIC,&sev,&timerid) != 0 ) {
-        perror("Error in creating newtimer\n");
-    }
-    struct timespec start_time;
-
-     if ( clock_gettime(CLOCK_MONOTONIC,&start_time) != 0 ) {
-        perror("Error in getting time\n");
-    } 
-
-    struct itimerspec itimerspec;
-    itimerspec.it_interval.tv_sec = 10;
-    itimerspec.it_interval.tv_nsec = 0;
-
-    timespec_add(&itimerspec.it_value,&start_time,&itimerspec.it_interval);
-    
-    // start timer in child
-    if( timer_settime(timerid, TIMER_ABSTIME, &itimerspec, NULL ) != 0 ) {
-        perror("Error in setting time\n");
-    } 
 
     slist_data_t *temp_node = NULL;
 
@@ -602,7 +542,6 @@ int main(int argc, char* argv[])
     SLIST_INSERT_HEAD(&head,datap,entries);                                          // add to linked list
     datap->threadParams.sock = newsock_t;
     datap->threadParams.completion_status = false;
-    datap->threadParams.fd=fd;
     datap->threadParams.mask = set;
     datap->threadParams.lock = &file_mutex;
     
